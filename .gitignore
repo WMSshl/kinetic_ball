@@ -1,0 +1,15 @@
+# 本地备份 / 临时文件（不提交）
+*_备份_*.html
+_*.js
+_*.txt
+_*.png
+_*.tmp
+*.bak
+*.local.html
+
+# 编辑器 / 系统
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store
+node_modules/

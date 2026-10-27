@@ -1,0 +1,4068 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>弹力球 · 打砖块（可自定义版）</title>
+<style>
+/* ══════════ 基础 ══════════ */
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  background:radial-gradient(1200px 700px at 50% -10%,#1b2456 0%,#0a0e20 55%,#05070f 100%);
+  color:#e8ecf8;font-family:"PingFang SC","Microsoft YaHei","Helvetica Neue",Arial,sans-serif;
+  display:flex;align-items:flex-start;justify-content:center;padding:14px;
+  -webkit-user-select:none;user-select:none;
+}
+.wrap{width:820px;max-width:100%;position:relative}
+canvas{display:block;width:100%;height:auto;aspect-ratio:4/3;background:#0b1024}
+
+/* ══════════ HUD ══════════ */
+.hud{display:flex;gap:8px;align-items:center;justify-content:space-between;
+  margin-bottom:9px;padding:9px 13px;background:rgba(255,255,255,.05);
+  border:1px solid rgba(255,255,255,.09);border-radius:13px;backdrop-filter:blur(6px)}
+.hud .item{display:flex;flex-direction:column;gap:2px;min-width:58px}
+.hud .label{font-size:10px;letter-spacing:2px;color:#8ea0c9}
+.hud .val{font-size:18px;font-weight:700;font-variant-numeric:tabular-nums}
+#lives{color:#ff6b81;letter-spacing:2px}
+#power{color:#fbbf24}
+
+/* ══════════ 舞台 ══════════ */
+.stage{position:relative;border-radius:16px;overflow:hidden;border:1px solid rgba(255,255,255,.1);
+  box-shadow:0 30px 70px rgba(0,0,0,.55),0 0 0 1px rgba(255,255,255,.03) inset}
+
+/* ══════════ 覆盖层 ══════════ */
+.overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:13px;text-align:center;padding:20px;
+  background:rgba(6,9,22,.8);backdrop-filter:blur(8px);transition:opacity .18s}
+.overlay.hide{opacity:0;pointer-events:none}
+.overlay h1{font-size:36px;letter-spacing:4px;
+  background:linear-gradient(90deg,#7dd3fc,#c084fc,#f472b6);
+  -webkit-background-clip:text;background-clip:text;color:transparent}
+.overlay p{color:#a9b6d6;font-size:13.5px;line-height:1.85;max-width:470px}
+.overlay .keys{font-size:11.5px;color:#7b89ad}
+.btnrow{display:flex;gap:11px;flex-wrap:wrap;justify-content:center}
+.btn{margin-top:5px;padding:11px 30px;border:none;border-radius:999px;cursor:pointer;
+  font-size:15px;font-weight:700;letter-spacing:2px;color:#0b1024;font-family:inherit;
+  background:linear-gradient(135deg,#7dd3fc,#c084fc);
+  box-shadow:0 10px 24px rgba(124,131,252,.35);transition:transform .12s}
+.btn.ghost{background:transparent;color:#c7d2fe;border:1px solid rgba(199,210,254,.45);
+  box-shadow:none;font-size:13.5px;padding:10px 24px}
+.btn.mini{padding:7px 16px;font-size:12.5px;letter-spacing:1px;margin-top:0}
+.btn:hover{transform:translateY(-2px)}
+.btn:active{transform:translateY(1px)}
+.tips{margin-top:9px;font-size:11.5px;color:#6d7ba3;text-align:center;line-height:1.8}
+
+/* ══════════ 选关 / 天赋 / 编辑器 面板 ══════════ */
+#selectUI{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;
+  gap:11px;padding:16px 20px;overflow-y:auto;
+  background:linear-gradient(180deg,rgba(8,12,28,.97),rgba(5,8,18,.99));backdrop-filter:blur(10px)}
+#selectUI.hide{display:none}
+.tabs{display:flex;gap:7px;margin-bottom:1px;flex-wrap:wrap;justify-content:center}
+.tab{padding:7px 18px;border-radius:9px;cursor:pointer;font-family:inherit;
+  background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);
+  color:#8ea0c9;font-size:13px;font-weight:700;letter-spacing:2px;transition:.12s}
+.tab:hover{color:#e8ecf8;border-color:rgba(199,210,254,.4)}
+.tab.on{color:#0b1024;background:linear-gradient(135deg,#7dd3fc,#c084fc);border-color:transparent}
+.pane{display:flex;flex-direction:column;align-items:center;gap:9px;width:100%}
+.pane.hide{display:none}
+
+/* 星星余额条 */
+.starbar{display:flex;align-items:center;gap:9px;flex-wrap:wrap;justify-content:center;
+  padding:8px 16px;border-radius:999px;font-size:12.5px;color:#8ea0c9;letter-spacing:1px;
+  background:rgba(250,204,21,.08);border:1px solid rgba(250,204,21,.3)}
+.starbar b{font-size:15px;color:#facc15;font-variant-numeric:tabular-nums}
+.starbar .sb-sep{opacity:.45}
+.starbar .sb-use b{color:#4ade80}
+.starbar .sb-use.low b{color:#f87171}
+.pane h2{font-size:21px;letter-spacing:5px;
+  background:linear-gradient(90deg,#7dd3fc,#c084fc,#f472b6);
+  -webkit-background-clip:text;background-clip:text;color:transparent}
+.selsub{font-size:11.5px;color:#7b89ad;margin-top:-3px}
+
+/* 关卡网格 */
+.grid{display:grid;grid-template-columns:repeat(6,1fr);gap:9px;margin-top:3px;width:100%;max-width:620px}
+.lv{position:relative;aspect-ratio:1/1;border-radius:11px;cursor:pointer;font-family:inherit;
+  background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14);color:#e8ecf8;padding:0;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+  transition:transform .12s,border-color .12s,background .12s}
+.lv:hover:not(.lock){transform:translateY(-3px);border-color:#c084fc;background:rgba(192,132,252,.16)}
+.lv .num{font-size:18px;font-weight:800;line-height:1}
+.lv .nm{font-size:8.5px;color:#8ea0c9;letter-spacing:1px}
+.lv .st{font-size:10px;color:#facc15;letter-spacing:1px;height:12px}
+.lv.lock{cursor:not-allowed;opacity:.4;filter:grayscale(1)}
+.lv.boss{border-color:rgba(251,191,36,.55)}
+.lv.boss .nm{color:#fbbf24}
+.lv.done{background:rgba(34,197,94,.12);border-color:rgba(74,222,128,.45)}
+.lv.now{border-color:#7dd3fc;box-shadow:0 0 0 2px rgba(125,211,252,.3)}
+.lv.cust{border-style:dashed;border-color:rgba(125,211,252,.6)}
+.lv.cust .nm{color:#7dd3fc}
+.sect{font-size:11px;color:#8ea0c9;letter-spacing:2px;margin-top:6px;align-self:flex-start}
+
+/* 天赋卡片 */
+.tal{display:flex;flex-direction:column;gap:9px;width:100%;max-width:540px;margin-top:2px}
+.talcard{display:flex;gap:11px;align-items:flex-start;text-align:left;cursor:pointer;padding:11px 13px;
+  border-radius:11px;font-family:inherit;color:#e8ecf8;background:rgba(255,255,255,.05);
+  border:1px solid rgba(255,255,255,.12);transition:.12s}
+.talcard:hover{background:rgba(192,132,252,.13);border-color:#c084fc}
+.talcard.on{border-color:#4ade80;background:rgba(74,222,128,.13)}
+/* 未解锁：整体压暗，图标灰掉，鼠标仍可点（点了会提示差几颗星） */
+.talcard.locked{opacity:.62;filter:saturate(.5)}
+.talcard.locked:hover{opacity:.9;border-color:#f87171;background:rgba(248,113,113,.08)}
+.talcard.locked .ico{background:rgba(255,255,255,.05)}
+/* 解锁瞬间的闪光 */
+.talcard.flash{animation:talflash .55s ease}
+@keyframes talflash{0%{box-shadow:0 0 0 0 rgba(74,222,128,.9)}100%{box-shadow:0 0 0 16px rgba(74,222,128,0)}}
+.talcard .ico{flex:0 0 40px;height:40px;border-radius:9px;display:flex;align-items:center;
+  justify-content:center;font-size:19px;background:rgba(255,255,255,.08);
+  border:1px solid rgba(255,255,255,.14)}
+.talcard.on .ico{background:rgba(74,222,128,.2);border-color:rgba(74,222,128,.5)}
+.talcard .body{flex:1;min-width:0}
+.talcard .tt{font-size:14px;font-weight:700;display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.talcard .ds{font-size:11px;color:#9fb0d4;line-height:1.6;margin-top:2px}
+.talcard .note{font-size:10.5px;color:#fbbf24;line-height:1.55;margin-top:3px;
+  padding:4px 7px;background:rgba(251,191,36,.08);border-left:2px solid rgba(251,191,36,.5);border-radius:3px}
+.badge{font-size:9.5px;padding:2px 7px;border-radius:999px;letter-spacing:1px;font-weight:700}
+.badge.eq{background:#4ade80;color:#06240f}
+.badge.free{background:rgba(250,204,21,.18);color:#facc15;border:1px solid rgba(250,204,21,.4)}
+.badge.lock{background:rgba(255,255,255,.08);color:#8ea0c9;border:1px solid rgba(255,255,255,.16)}
+.badge.cost{background:rgba(248,113,113,.16);color:#f87171;border:1px solid rgba(248,113,113,.4)}
+
+/* 编辑器 */
+.edwrap{display:flex;flex-direction:column;gap:9px;width:100%;max-width:640px;align-items:center}
+.edbar{display:flex;gap:9px;flex-wrap:wrap;justify-content:center;align-items:center}
+.edbar label{font-size:11px;color:#8ea0c9;display:flex;align-items:center;gap:4px}
+.edbar input,.edbar select{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.16);
+  color:#e8ecf8;border-radius:7px;padding:5px 8px;font-size:12px;font-family:inherit}
+.edbar input[type=number]{width:62px}
+.edbar input[type=text]{width:110px}
+.palette{display:flex;gap:6px;flex-wrap:wrap;justify-content:center}
+.pal{padding:6px 11px;border-radius:8px;cursor:pointer;font-family:inherit;font-size:11.5px;
+  background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.16);color:#e8ecf8;transition:.12s}
+.pal:hover{border-color:#c084fc}
+.pal.on{background:linear-gradient(135deg,#7dd3fc,#c084fc);color:#0b1024;border-color:transparent;font-weight:700}
+.edgrid{display:grid;gap:3px;background:rgba(0,0,0,.3);padding:7px;border-radius:10px;
+  border:1px solid rgba(255,255,255,.1)}
+.cell{width:34px;height:22px;border-radius:4px;cursor:pointer;border:1px solid rgba(255,255,255,.13);
+  background:rgba(255,255,255,.04);transition:.08s;font-family:inherit;padding:0}
+.cell:hover{border-color:#fff}
+textarea{width:100%;max-width:640px;height:88px;background:rgba(0,0,0,.35);color:#a9b6d6;
+  border:1px solid rgba(255,255,255,.14);border-radius:9px;padding:8px;font-size:11px;
+  font-family:ui-monospace,Menlo,Consolas,monospace;resize:vertical}
+.hint{font-size:10.5px;color:#6d7ba3;line-height:1.6;text-align:center}
+
+/* 页内确认框 / 提示条 */
+#modal{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;
+  background:rgba(4,6,16,.72);backdrop-filter:blur(4px)}
+#modal.hide{display:none}
+
+/* ══════════ 回收站（自制内容备份 / 旧存档抢救）══════════ */
+#binUI{position:fixed;inset:0;z-index:9997;display:flex;align-items:center;justify-content:center;
+  background:rgba(4,6,16,.78);backdrop-filter:blur(6px);padding:18px}
+#binUI.hide{display:none}
+.binwrap{width:100%;max-width:560px;max-height:86vh;overflow-y:auto;padding:18px 20px;border-radius:14px;
+  background:#131a38;border:1px solid rgba(255,255,255,.16);box-shadow:0 24px 60px rgba(0,0,0,.6);
+  display:flex;flex-direction:column;align-items:center;gap:10px}
+.binwrap h2{font-size:20px;letter-spacing:4px;
+  background:linear-gradient(90deg,#7dd3fc,#c084fc,#f472b6);
+  -webkit-background-clip:text;background-clip:text;color:transparent}
+.binlist{display:flex;flex-direction:column;gap:8px;width:100%}
+.binitem{display:flex;gap:10px;align-items:center;text-align:left;padding:10px 12px;border-radius:11px;
+  background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12)}
+.binitem .bi-body{flex:1;min-width:0}
+.binitem .bi-t{font-size:13px;font-weight:700;color:#e8ecf8}
+.binitem .bi-s{font-size:11px;color:#9fb0d4;margin-top:2px;line-height:1.55}
+.binitem .bi-btns{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.binitem.old{border-color:rgba(251,191,36,.45);background:rgba(251,191,36,.08)}
+.binempty{font-size:12.5px;color:#7b89ad;line-height:1.8;text-align:center;padding:10px}
+.mbox{max-width:400px;padding:22px 24px;border-radius:14px;text-align:center;
+  background:#131a38;border:1px solid rgba(255,255,255,.16);
+  box-shadow:0 24px 60px rgba(0,0,0,.6)}
+.mbox p{font-size:14px;line-height:1.8;color:#e8ecf8;margin-bottom:14px;word-break:break-all}
+#toast{position:fixed;left:50%;bottom:34px;transform:translateX(-50%);z-index:9998;
+  pointer-events:none;   /* 提示条绝不能挡住画布上的点击 */
+  padding:11px 22px;border-radius:999px;font-size:13px;color:#e8ecf8;
+  background:rgba(19,26,56,.96);border:1px solid rgba(255,255,255,.18);
+  box-shadow:0 12px 30px rgba(0,0,0,.5);transition:opacity .18s,transform .18s}
+#toast.hide{opacity:0;pointer-events:none;transform:translateX(-50%) translateY(8px)}
+#toast.warn{border-color:rgba(251,191,36,.6);color:#facc15}
+#toast.ok{border-color:rgba(74,222,128,.6);color:#4ade80}
+
+/* 编辑器：四类子页签与表单 */
+.subtabs{display:flex;gap:6px;margin:2px 0 4px}
+.sub{padding:5px 16px;border-radius:8px;cursor:pointer;font-family:inherit;font-size:12px;font-weight:700;
+  letter-spacing:2px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);
+  color:#8ea0c9;transition:.12s}
+.sub:hover{color:#e8ecf8;border-color:rgba(199,210,254,.4)}
+.sub.on{color:#0b1024;background:linear-gradient(135deg,#7dd3fc,#c084fc);border-color:transparent}
+.subpane{display:flex;flex-direction:column;align-items:center;gap:8px;width:100%;max-width:640px}
+.subpane.hide{display:none}
+.form{display:flex;gap:9px;flex-wrap:wrap;justify-content:center;width:100%}
+.form label{font-size:11px;color:#8ea0c9;display:flex;align-items:center;gap:4px}
+.form input,.form select{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.16);
+  color:#e8ecf8;border-radius:7px;padding:5px 8px;font-size:12px;font-family:inherit}
+.form input[type=number]{width:68px}
+.form input[type=text]{width:104px}
+.form input[type=color]{width:44px;height:28px;padding:1px;cursor:pointer}
+.fld{font-size:11px;color:#8ea0c9;letter-spacing:2px;margin-top:2px}
+textarea.note{height:56px;max-width:640px}
+.listbox{max-width:640px;width:100%;padding:6px;border-radius:7px;
+  background:rgba(255,255,255,.07);color:#e8ecf8;border:1px solid rgba(255,255,255,.16);
+  font-family:inherit;font-size:12px}
+.selbar{display:flex;gap:9px;align-items:center;margin-top:4px;flex-wrap:wrap;justify-content:center}
+.totalbar{font-size:11.5px;color:#8ea0c9;letter-spacing:1px}
+.totalbar b{color:#facc15;font-size:14px}
+@media (max-width:580px){.grid{grid-template-columns:repeat(4,1fr)}.pane h2{font-size:17px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hud">
+    <div class="item"><span class="label">最高</span><span class="val" id="best">0</span></div>
+    <div class="item"><span class="label">关卡</span><span class="val" id="level">1</span></div>
+    <div class="item"><span class="label">伤害</span><span class="val" id="power">5</span></div>
+    <div class="item"><span class="label">球速</span><span class="val" id="spd">1.00×</span></div>
+    <div class="item"><span class="label">可用星</span><span class="val" id="hudStar" style="color:#facc15">0</span></div>
+  </div>
+
+  <div class="stage">
+    <canvas id="game"></canvas>
+
+    <div class="overlay" id="overlay">
+      <h1 id="ovTitle">弹力球</h1>
+      <p id="ovText"></p>
+      <div class="btnrow">
+        <button class="btn" id="ovBtn">开始游戏</button>
+        <button class="btn ghost" id="ovBtn2">选关</button>
+      </div>
+      <p class="keys" id="ovKeys"></p>
+    </div>
+
+    <div id="selectUI" class="hide">
+      <!-- 星星余额：天赋解锁的唯一货币 -->
+      <div class="starbar">
+        <span class="sb-i">已获 <b id="starTotal">0</b> ★</span>
+        <span class="sb-sep">·</span>
+        <span class="sb-i">已花 <b id="starSpent">0</b> ★</span>
+        <span class="sb-sep">·</span>
+        <span class="sb-i sb-use">可用 <b id="starUsable">0</b> ★</span>
+      </div>
+
+      <div class="tabs">
+        <button class="tab on" data-tab="lv">关卡</button>
+        <button class="tab" data-tab="paddle">平台</button>
+        <button class="tab" data-tab="ball">小球</button>
+        <button class="tab" data-tab="brick">砖块</button>
+        <button class="tab" data-tab="edit">编辑器</button>
+      </div>
+
+      <div class="pane" id="paneLv">
+        <h2>选择关卡</h2>
+        <p class="selsub">通关解锁下一关　·　不掉命 ★★★ / 掉1命 ★★ / 掉2命+ ★</p>
+        <div class="grid" id="lvGrid"></div>
+        <p class="sect" id="custSect" style="display:none">自定义关卡</p>
+        <div class="grid" id="custGrid" style="display:none"></div>
+      </div>
+
+      <div class="pane hide" id="panePaddle"><h2>平台（挡板）</h2>
+        <p class="selsub" id="paddleSub">点击解锁并装备　·　<b style="color:#4ade80">测试模式：全部 0 ★</b></p>
+        <div class="tal" id="talPaddle"></div></div>
+      <div class="pane hide" id="paneBall"><h2>小球</h2>
+        <p class="selsub" id="ballSub">点击解锁并装备　·　<b style="color:#4ade80">测试模式：全部 0 ★</b></p>
+        <div class="tal" id="talBall"></div></div>
+      <div class="pane hide" id="paneBrick"><h2>砖块图鉴</h2>
+        <p class="selsub">关卡中可用的砖块类型　·　在编辑器里选用</p><div class="tal" id="talBrick"></div></div>
+
+      <div class="pane hide" id="paneEdit">
+        <h2>内容编辑器</h2>
+        <p class="selsub">砖块 / 小球 / 挡板 / 关卡 四类均可编辑　·　导出 JSON 交给 AI 生成模块</p>
+        <div class="subtabs" id="edSubTabs">
+          <button class="sub on" data-sub="brick">砖块</button>
+          <button class="sub" data-sub="ball">小球</button>
+          <button class="sub" data-sub="paddle">挡板</button>
+          <button class="sub" data-sub="level">关卡</button>
+        </div>
+
+        <!-- 砖块 -->
+        <div class="subpane" id="subBrick">
+          <div class="form">
+            <label>名称<input type="text" id="bkName"></label>
+            <label>生命值<input type="number" id="bkHp" min="1" max="999" step="1"></label>
+            <label>分值<input type="number" id="bkScore" min="0" max="999" step="1"></label>
+            <label>颜色<input type="color" id="bkColor"></label>
+            <label>图案字符<input type="text" id="bkCh" maxlength="1" style="width:44px;text-align:center"></label>
+          </div>
+          <p class="fld">各技能掉落几率（%）</p>
+          <div class="form" id="bkDrops"></div>
+          <p class="fld">效果描述（AI 依据此生成能力模块）</p>
+          <textarea id="bkNote" class="note" placeholder="例：击碎时炸毁周围一圈砖块，半径 1 格，伤害 5"></textarea>
+          <p class="fld" id="bkStatus"></p>
+          <div class="edbar">
+            <button class="btn mini" id="bkSave">保存砖块</button>
+            <button class="btn mini ghost" id="bkNew">新建</button>
+            <button class="btn mini ghost" id="bkDel">删除</button>
+          </div>
+          <select id="bkList" class="listbox"></select>
+        </div>
+
+        <!-- 小球 -->
+        <div class="subpane hide" id="subBall">
+          <div class="form">
+            <label>名称<input type="text" id="blName"></label>
+            <label>伤害倍率<input type="number" id="blDmg" min="0.1" max="10" step="0.1"></label>
+            <label>速度倍率<input type="number" id="blSpd" min="0.1" max="5" step="0.05"></label>
+            <label>半径<input type="number" id="blR" min="4" max="20" step="1"></label>
+            <label>颜色<input type="color" id="blColor"></label>
+          </div>
+          <p class="fld">效果描述（AI 依据此生成能力模块）</p>
+          <textarea id="blNote" class="note" placeholder="例：撞击砖块时不重置连击，且每次撞击额外回复 1 点热度"></textarea>
+          <p class="fld" id="blStatus"></p>
+          <div class="edbar">
+            <button class="btn mini" id="blSave">保存小球</button>
+            <button class="btn mini ghost" id="blNew">新建</button>
+            <button class="btn mini ghost" id="blDel">删除</button>
+          </div>
+          <select id="blList" class="listbox"></select>
+        </div>
+
+        <!-- 挡板 -->
+        <div class="subpane hide" id="subPaddle">
+          <div class="form">
+            <label>名称<input type="text" id="pdName"></label>
+            <label>长度倍率<input type="number" id="pdW" min="0.4" max="3" step="0.05"></label>
+            <label>图标<input type="text" id="pdIcon" maxlength="2" style="width:44px;text-align:center"></label>
+          </div>
+          <p class="fld">效果描述（AI 依据此生成能力模块）</p>
+          <textarea id="pdNote" class="note" placeholder="例：左键点击激活弹性增强，持续 0.2 秒，窗口内接到的球额外加速度与热度"></textarea>
+          <p class="fld" id="pdStatus"></p>
+          <div class="edbar">
+            <button class="btn mini" id="pdSave">保存挡板</button>
+            <button class="btn mini ghost" id="pdNew">新建</button>
+            <button class="btn mini ghost" id="pdDel">删除</button>
+          </div>
+          <select id="pdList" class="listbox"></select>
+        </div>
+
+        <!-- 关卡 -->
+        <div class="subpane hide" id="subLevel">
+          <div class="form">
+            <label>名称<input type="text" id="edName"></label>
+            <label>球速<input type="number" id="edSpeed" step="0.1" min="1" max="14"></label>
+            <label>行<input type="number" id="edRows" step="1" min="1" max="8"></label>
+            <label>BOSS<select id="edBoss"><option value="">无</option><option value="standard">标准</option></select></label>
+            <label>平台<select id="edPaddle"></select></label>
+            <label>小球<select id="edBall"></select></label>
+          </div>
+          <div class="palette" id="edPalette"></div>
+          <div class="edgrid" id="edGrid"></div>
+          <p class="fld" id="edStatus"></p>
+          <div class="edbar">
+            <button class="btn mini" id="edSave">保存关卡</button>
+            <button class="btn mini ghost" id="edNew">新建</button>
+            <button class="btn mini ghost" id="edTest">试玩</button>
+            <button class="btn mini ghost" id="edClear">清空画布</button>
+            <button class="btn mini ghost" id="edDel">删除</button>
+          </div>
+          <select id="edList" class="listbox"></select>
+        </div>
+
+        <!-- 通用导出区 -->
+        <div class="edbar" style="border-top:1px solid rgba(255,255,255,.1);padding-top:10px;margin-top:2px">
+          <button class="btn mini" id="exAll">导出全部 JSON</button>
+          <button class="btn mini ghost" id="exCode">生成模块代码</button>
+          <button class="btn mini ghost" id="exCopy">复制到剪贴板</button>
+          <button class="btn mini ghost" id="exImport">导入 JSON</button>
+        </div>
+        <textarea id="edJson" placeholder="点「导出全部 JSON」生成可交给 AI 的数据；点「生成模块代码」输出可直接粘贴的 Reg 注册代码；也可在此粘贴 JSON 后点「导入 JSON」"></textarea>
+        <p class="hint">流程：在此编辑属性 → 导出全部 JSON → 把 JSON 交给 AI → AI 按「效果描述」生成能力模块代码 → 粘贴回来。<br>
+        想让自制内容脱离浏览器、跟着文件走：用「选关 → 存进文件…」下载一份已固化内容的 HTML。</p>
+      </div>
+
+      <div class="selbar">
+        <button class="btn" id="selPlay">继续闯关</button>
+        <button class="btn ghost" id="selReset">重置进度（保留自制）</button>
+        <button class="btn ghost mini" id="selWipe">清空自制内容…</button>
+        <button class="btn ghost mini" id="selBin">回收站…</button>
+        <button class="btn ghost mini" id="selBake">存进文件…</button>
+      </div>
+    </div>
+  </div>
+
+  <p class="tips" id="tips"></p>
+</div>
+
+<!-- 回收站：自制内容的自动备份 + 旧存档抢救 -->
+<div id="binUI" class="hide">
+  <div class="binwrap">
+    <h2>回收站</h2>
+    <p class="selsub">自动备份 & 旧存档抢救　·　默认「合并还原」，不会覆盖现有条目</p>
+    <p class="fld">自动备份</p>
+    <div class="binlist" id="binList"></div>
+    <p class="fld" id="binOldT" style="display:none">在旧存档里发现的自制内容</p>
+    <div class="binlist" id="binOld"></div>
+    <div class="selbar">
+      <button class="btn" id="binClose">关闭</button>
+      <button class="btn ghost mini" id="binExport">导出备份 JSON</button>
+      <button class="btn ghost mini" id="binClear">清空回收站</button>
+    </div>
+  </div>
+</div>
+
+<!-- 页内确认框（替代 confirm，避免浏览器屏蔽原生对话框后失效） -->
+<div id="modal" class="hide">
+  <div class="mbox">
+    <p id="moTitle"></p>
+    <div class="btnrow">
+      <button class="btn mini" id="moYes">确定</button>
+      <button class="btn mini ghost" id="moNo">取消</button>
+    </div>
+  </div>
+</div>
+<!-- 页内提示条（替代 alert） -->
+<div id="toast" class="hide"></div>
+
+<script>
+(() => {
+'use strict';
+
+/* ══════════════════════════════════════════════════════════════
+   1. 常量配置
+   ══════════════════════════════════════════════════════════════ */
+const C = {
+  W: 800, H: 600,
+  COLS: 10, ROWS_MAX: 8,
+  MARGIN: 40, TOP: 66, BH: 26, GAP: 6,
+  BW: (800 - 80 - 54) / 10,            // 砖块宽 66.6
+  PADDLE_Y: 554, PADDLE_H: 14, PW: 112,
+  DT: 1 / 60,                          // 固定物理步长
+  MAX_BALLS: 8,
+  PART_MAX: 420,                       // 粒子池容量
+  // 动能蓄力
+  BASE_DMG: 5, DMG_MAX: 3,
+  HEAT_BASE: 1.2, HEAT_COMP: 0.12, HEAT_PER_D: 9, HEAT_MAX: 18,
+  SPD_BOOST: 1.0, SPD_CAP: 24,
+  PADDLE_KEEP: 0.65, PADDLE_LOSS: 1.5,
+  // 弹射挡板
+  PULSE_TIME: 0.20, PULSE_CD: 0.30, PULSE_HEAT: 6, PULSE_BOOST: 4.0, BOOST_DECAY: 3.0,
+  // 道具
+  DROP_RATE: 0.16, LASER_CD: 0.3, LASER_DMG: 5, LASER_SPD: 13, POP_MAX: 40
+};
+
+/* ══════════════════════════════════════════════════════════════
+   2. 工具
+   ══════════════════════════════════════════════════════════════ */
+const U = {
+  clamp: (v, a, b) => v < a ? a : v > b ? b : v,
+  sign: v => v < 0 ? -1 : 1,
+  rnd: (a, b) => a + Math.random() * (b - a),
+  pick: arr => arr[(Math.random() * arr.length) | 0],
+  // 圆角矩形路径
+  rr(x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+};
+
+/* ══════════════════════════════════════════════════════════════
+   2.5 天赋价格表（星星解锁）
+     ⚠ 当前为测试模式：所有装备一律 0 ★，点击即可解锁/装备，方便体验全部内容。
+     正式发布想恢复收费：重球 1 ★，其余挡板 / 小球 3 ★；改 TALENT_COST 即可。
+     自定义（编辑器里造出来的）挡板 / 小球默认价见 TALENT_COST_DEFAULT（当前 0）。
+     想调价只改这张表即可，不用动渲染和存档逻辑。
+   ══════════════════════════════════════════════════════════════ */
+const TALENT_COST = {
+  paddle: {classic: 0, bouncy: 0, wide: 0, magnet: 0, random: 0, laser: 0, pierce: 0},
+  ball:   {classic: 0, heavy: 0, pierceBall: 0, stackBall: 0, burnBall: 0}
+};
+const TALENT_COST_DEFAULT = 0;          // 表外条目（含自制）默认价：测试模式免费
+/* 能力 id → 天赋卡上显示的中文名（只影响显示，不影响逻辑） */
+const ABILITY_NAME = {
+  pulse:'弹射', laserPaddle:'激光', magnet:'磁力', pierce:'穿透',
+  randomPaddle:'随机召唤', pierceBall:'永久穿透', stackBall:'增强',
+  burn:'灼热', heavyBall:'重球', explode:'爆破', dropOnBreak:'掉落'
+};
+function talentCost(slot, id) {
+  const t = TALENT_COST[slot];
+  if (t && t[id] != null) return t[id];
+  if (id === 'classic') return 0;       // 基础装备永远免费
+  return TALENT_COST_DEFAULT;
+}
+/* 当前价格说明：根据 TALENT_COST 自动生成，改价后界面文案不会说谎 */
+function talentPriceNote() {
+  const costs = [];
+  for (const slot of ['paddle', 'ball'])
+    for (const d of Reg.list(slot)) {
+      const c = Store.costOf(slot, d);
+      if (c > 0) costs.push(c);
+    }
+  if (!costs.length) return '当前测试模式：全部 0 ★';
+  const min = Math.min(...costs), max = Math.max(...costs);
+  return min === max ? `当前解锁价 ${min} ★` : `当前解锁价 ${min}–${max} ★`;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   3. 注册表 —— 所有可自定义内容的唯一入口
+      Reg.brick(id, def)   砖块
+      Reg.paddle(id, def)  平台（挡板）
+      Reg.ball(id, def)    小球
+      Reg.boss(id, def)    BOSS
+      Reg.power(id, def)   掉落道具
+      Reg.ability(id, def) 能力模块（钩子集合）
+   ══════════════════════════════════════════════════════════════ */
+const Reg = {
+  _t: {brick:{}, paddle:{}, ball:{}, boss:{}, power:{}, ability:{}},
+  _def(table, id, def) {
+    if (!def) {
+      // 查不到时回退到 classic，避免装备了已删除/无效的 id 直接崩溃
+      const hit = this._t[table][id];
+      if (hit) return hit;
+      const fb = this._t[table].classic;
+      // 只回退、不写缓存：否则自定义 id 会被永久绑到 classic，之后注册进来也读不到
+      if (fb) return fb;
+      return undefined;
+    }
+    def.id = id;
+    this._t[table][id] = def;
+    return def;
+  },
+  brick:  (id, d) => Reg._def('brick',  id, d),
+  paddle: (id, d) => Reg._def('paddle', id, d),
+  ball:   (id, d) => Reg._def('ball',   id, d),
+  boss:   (id, d) => Reg._def('boss',   id, d),
+  power:  (id, d) => Reg._def('power',  id, d),
+  ability:(id, d) => Reg._def('ability',id, d),
+  list:   table => Object.values(Reg._t[table]),
+  get:    (table, id) => Reg._t[table][id] || Reg._t[table].classic,
+  remove(table, id) { delete this._t[table][id]; this._custom.delete(id); },
+  _custom: new Set(),
+  clearCustom() {
+    for (const id of this._custom) {
+      delete this._t.brick[id]; delete this._t.ball[id]; delete this._t.paddle[id];
+    }
+    this._custom.clear();
+  },
+  // 把存档里的自定义内容注册进注册表（启动时 + 保存后调用）
+  loadCustom() {
+    this.clearCustom();
+    const c = Store.data.custom;
+    // 再走一次 Custom.register：补默认字段，并在 abilities 为空时按 note 关键词挂上能力
+    for (const o of c.bricks)  { this._t.brick[o.id]  = o;  this._custom.add(o.id); Custom.register(o); }
+    for (const o of c.balls)   { this._t.ball[o.id]   = o;  this._custom.add(o.id); Custom.register(o); }
+    for (const o of c.paddles) { this._t.paddle[o.id] = o;  this._custom.add(o.id); Custom.register(o); }
+  }
+};
+
+/* ── 自定义内容管理：id 生成、字符分配、注册 ── */
+/* note 关键词 → 已实现的能力。
+   用途：当条目只有 note（效果描述）而 abilities 为空时（例如 AI 还没来得及
+   生成模块、或用户手写 JSON），游戏按关键词自动挂上对应能力，保证立即可玩。 */
+/* kind 用来区分「同一个关键词」挂到挡板还是小球上：
+   例如「穿透」——挡板挂 pierce（发球一次、撞墙失效），小球挂 pierceBall（永久穿透）。 */
+const NOTE_FX = [
+  {kind:'paddle', t:'laserPaddle', kw:['激光', '发射', '炮台', '射击', 'laser'],
+   ab:{t:'laserPaddle', rate:0.18, minCd:0.06, per:12, base:1, idleReset:2}},
+  {kind:'paddle', t:'magnet', kw:['磁力', '吸引', '吸附', '磁吸', 'magnet'],
+   // 最终吸力 = 下面参数算出的 fall × MAGNET_SCALE（当前 0.5，即磁力减半）
+   ab:{t:'magnet', force:19, floor:0.45, curve:1.5, spread:1.0, rise:0.3, dead:20, near:46}},
+  {kind:'paddle', t:'pierce', kw:['穿透', '穿过', '贯穿', '透穿', 'pierce'],
+   ab:{t:'pierce'}},
+  {kind:'paddle', t:'randomPaddle', kw:['随机', '召唤', '生成球', '额外球', '召唤球', 'random'],
+   ab:{t:'randomPaddle', per:5, count:2}},
+  {kind:'ball', t:'burn', kw:['灼热', '燃烧', '点燃', '着火', '灼烧', 'burn'],
+   ab:{t:'burn', dmg:40, stack:5}},
+  {kind:'ball', t:'pierceBall', kw:['穿透', '穿过', '贯穿', '透穿', 'pierce'],
+   ab:{t:'pierceBall'}},
+  {kind:'ball', t:'stackBall', kw:['叠伤', '叠加伤害', '递增伤害', '成长', '越打越疼', 'stack'],
+   ab:{t:'stackBall', per:5, add:1}}
+];
+
+const Custom = {
+  prefix: {bricks:'ub', balls:'ubl', paddles:'upd', levels:'ulv'},
+
+  // 按 note 关键词推断能力（只在 abilities 为空时兜底）
+  // kind：先按条目字段判断它是砖块 / 小球 / 挡板，再只匹配同 kind 的规则，
+  // 这样「穿透」不会把挡板的能力挂到小球上（反之亦然）。
+  kindOf(o) {
+    if (!o) return null;
+    if (o.hp !== undefined || o.score !== undefined) return 'brick';
+    if (o.dmgMul !== undefined || o.spdMul !== undefined || o.r !== undefined) return 'ball';
+    if (o.wMul !== undefined || o.w !== undefined) return 'paddle';
+    return null;
+  },
+  noteAbilities(o) {
+    if (!o || !o.note) return null;
+    if (o.abilities && o.abilities.length) return null;
+    // 名称也参与匹配：例如叫「叠伤球」但 note 只写了「每次接板涨伤害」也能挂上
+    const n = String(o.note) + ' ' + (o.name ? String(o.name) : '');
+    const kind = this.kindOf(o);
+    for (const f of NOTE_FX) {
+      if (f.kind && kind && f.kind !== kind) continue;
+      if (f.kw.some(k => n.includes(k)) && Reg.ability(f.t)) return [{...f.ab}];
+    }
+    return null;
+  },
+  table:  kind => ({bricks:'brick', balls:'ball', paddles:'paddle'}[kind]),
+  slotOf: kind => ({bricks:'brick', balls:'ball', paddles:'paddle'}[kind]),
+
+  newId(kind) {
+    const pre = this.prefix[kind];
+    const list = Store.data.custom[kind];
+    let n = 1;
+    const used = new Set(list.map(o => o.id));
+    while (used.has(pre + n)) n++;
+    return pre + n;
+  },
+
+  // 分配一个未占用的图案字符（用于关卡网格）
+  freeChar(except) {
+    const used = new Set();
+    for (const b of Reg.list('brick')) if (b.ch && b.id !== except) used.add(b.ch);
+    const pool = '123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    for (const c of pool) if (!used.has(c)) return c;
+    return '';
+  },
+
+  // 把自定义对象补上默认字段后注册
+  register(o) {
+    if (!o || !o.id) return;
+    Reg._custom.add(o.id);
+    // note 有描述但 abilities 为空 → 按关键词自动挂已实现的能力
+    const guessed = this.noteAbilities(o);
+    if (guessed) o.abilities = guessed;
+    o.abilities = o.abilities || [];
+    if (o.hp !== undefined || o.score !== undefined) {   // 砖块
+      if (!o.ch) o.ch = this.freeChar(o.id);
+      Reg.brick(o.id, o);
+    } else if (o.dmgMul !== undefined || o.spdMul !== undefined) {   // 小球
+      if (o.cost == null) o.cost = TALENT_COST_DEFAULT;  // 自制小球默认价（当前 0）
+      o.icon = o.icon || '●'; o.r = o.r || 8;
+      Reg.ball(o.id, o);
+    } else {                                             // 挡板（缺 wMul 时按 w 反推）
+      if (o.cost == null) o.cost = TALENT_COST_DEFAULT;  // 自制挡板默认价（当前 0）
+      o.icon = o.icon || '▬';
+      if (o.wMul === undefined) o.wMul = (o.w || C.PW) / C.PW;
+      o.w = Math.round(C.PW * o.wMul);
+      Reg.paddle(o.id, o);
+    }
+  },
+
+  loadAll() { Reg.loadCustom(); },
+
+  /* ── 导出：交给 AI 的结构化数据 ── */
+  exportJSON() {
+    const c = Store.data.custom;
+    const clean = o => Object.fromEntries(
+      Object.entries(o).filter(([k]) => k !== 'id' || true));
+    return {
+      _format: 'breakout-custom-v1',
+      _spec: {
+        brick:  '{id,name,hp,score,color,ch,drops:{道具键:0~1概率},note,abilities:[]}',
+        ball:   '{id,name,dmgMul,spdMul,r,color,note,abilities:[]}',
+        paddle: '{id,name,wMul,w,icon,note,abilities:[]}',
+        level:  '{id,name,speed,boss,paddle,ball,pat:[每行为10字符]}',
+        power:  '可用道具键：' + Reg.list('power').map(p => p.id + '=' + p.name).join(' '),
+        ability:'可用钩子：onPaddleClick / onBallPaddleHit / onBallSpawn / onBallLaunch / onBrickDestroy / onPaddleUpdate / onBallUpdate / onBallBrickHit / onBallBossHit / onBallWallHit / onLifeLost',
+        builtin:'游戏内已实现的能力模块（abilities 的 t 字段可直接引用）：' + Reg.list('ability').map(a => a.id).join(' '),
+        abilityKind:'paddle 类：pulse laserPaddle magnet pierce randomPaddle ／ ball 类：heavyBall burn pierceBall stackBall ／ brick 类：explode dropOnBreak'
+      },
+      _guide: 'note 字段是效果描述，请据此为每个 note 非空的条目生成一个 Reg.ability 模块，并挂到对应 abilities 上。',
+      bricks:  c.bricks.map(b => ({id:b.id, name:b.name, hp:b.hp, score:b.score, color:b.color,
+                ch:b.ch, drops:b.drops || {}, note:b.note || '', abilities:b.abilities || []})),
+      balls:   c.balls.map(b => ({id:b.id, name:b.name, dmgMul:b.dmgMul, spdMul:b.spdMul,
+                r:b.r, color:b.color || '', note:b.note || '', abilities:b.abilities || []})),
+      paddles: c.paddles.map(b => ({id:b.id, name:b.name, wMul:b.wMul, w:b.w, icon:b.icon,
+                note:b.note || '', abilities:b.abilities || []})),
+      levels:  c.levels.map(l => ({id:l.id || '', name:l.name, speed:l.speed, boss:l.boss,
+                paddle:l.paddle, ball:l.ball, pat:l.pat}))
+    };
+  },
+
+  /* ── 生成可直接粘贴的 Reg 注册代码 ── */
+  exportCode() {
+    const c = Store.data.custom;
+    const L = [];
+    L.push('/* ════ 自定义内容（由编辑器生成，可整段粘贴到 Reg 定义之后）════ */');
+    const q = v => typeof v === 'string' ? "'" + v.replace(/'/g, "\'") + "'" : String(v);
+    for (const b of c.bricks) {
+      L.push(`Reg.brick(${q(b.id)}, {`);
+      L.push(`  name:${q(b.name)}, hp:${b.hp}, score:${b.score}, color:${q(b.color)}, ch:${q(b.ch)},`);
+      if (b.drops && Object.keys(b.drops).length)
+        L.push(`  drops:{${Object.entries(b.drops).map(([k, v]) => k + ':' + v).join(', ')}},`);
+      L.push(`  abilities:[],   // TODO: 按下方 note 实现后填入`);
+      L.push(`  note:${q(b.note || '')}`);
+      L.push(`});`);
+    }
+    for (const b of c.balls) {
+      L.push(`Reg.ball(${q(b.id)}, {`);
+      L.push(`  name:${q(b.name)}, icon:${q(b.icon || '●')}, r:${b.r || 8}, cost:${b.cost == null ? TALENT_COST_DEFAULT : b.cost},`);
+      L.push(`  dmgMul:${b.dmgMul}, spdMul:${b.spdMul}, color:${q(b.color || '#e2e8ff')},`);
+      L.push(`  abilities:[],   // TODO`);
+      L.push(`  note:${q(b.note || '')}`);
+      L.push(`});`);
+    }
+    for (const b of c.paddles) {
+      L.push(`Reg.paddle(${q(b.id)}, {`);
+      L.push(`  name:${q(b.name)}, icon:${q(b.icon || '▬')}, wMul:${b.wMul}, w:${b.w}, cost:${b.cost == null ? TALENT_COST_DEFAULT : b.cost},`);
+      L.push(`  abilities:[],   // TODO`);
+      L.push(`  note:${q(b.note || '')}`);
+      L.push(`});`);
+    }
+    if (c.levels.length) {
+      L.push('/* 自定义关卡（追加到 LEVELS 即可）*/');
+      for (const l of c.levels)
+        L.push(`LEVELS.push(${JSON.stringify({name:l.name, speed:l.speed, boss:l.boss,
+          paddle:l.paddle, ball:l.ball, pat:l.pat}, null, 1)});`);
+    }
+    // 为每个 note 生成能力骨架
+    const notes = [];
+    for (const b of c.bricks)  if (b.note) notes.push(['brick', b.id, b.note]);
+    for (const b of c.balls)   if (b.note) notes.push(['ball', b.id, b.note]);
+    for (const b of c.paddles) if (b.note) notes.push(['paddle', b.id, b.note]);
+    if (notes.length) {
+      L.push('');
+      L.push('/* ════ 待实现的能力模块（按 note 描述实现，然后挂进上面的 abilities）════ */');
+      for (const [kind, id, note] of notes) {
+        const hook = kind === 'brick' ? 'onBrickDestroy' : kind === 'ball' ? 'onBallSpawn' : 'onPaddleClick';
+        L.push(`// ${id}：${note}`);
+        L.push(`Reg.ability(${q(id + '_effect')}, {`);
+        L.push(`  ${hook}(${kind === 'brick' ? 'bk, ab' : kind === 'ball' ? 'ball, ab' : 'pd, ab'}) {`);
+        L.push(`    // TODO: 实现 —— ${note}`);
+        L.push(`  }`);
+        L.push(`});`);
+      }
+    }
+    return L.join('\n');
+  }
+};
+
+/* ── 砖块：hp 血量 / score 分值 / color 颜色 / abilities 能力列表 / note 效果备注 ── */
+Reg.brick('soft',  {name:'软砖',   hp:5,  score:10, color:'#38bdf8', ch:'1', abilities:[], note:'最基础的砖块，一击即碎。'});
+Reg.brick('mid',   {name:'中砖',   hp:10, score:20, color:'#facc15', ch:'2', abilities:[], note:'需要两击（或一击满热度）。'});
+Reg.brick('hard',  {name:'硬砖',   hp:15, score:30, color:'#f472b6', ch:'3', abilities:[], note:'需要三击，或满热度一击。'});
+Reg.brick('steel', {name:'钢砖',   hp:25, score:45, color:'#94a3b8', ch:'4', abilities:[], note:'很硬的砖，满热度也需两击。'});
+Reg.brick('boom',  {name:'爆破砖', hp:5,  score:25, color:'#ef4444', ch:'B',
+                   abilities:[{t:'explode', radius:1, dmg:5}],
+                   note:'击碎时炸毁周围一圈砖块（半径1格，伤害5）。'});
+Reg.brick('gift',  {name:'礼物砖', hp:5,  score:15, color:'#a78bfa', ch:'G',
+                   abilities:[{t:'dropOnBreak', force:true}],
+                   note:'击碎时必定掉落一个道具。'});
+
+/* ── 平台（挡板）：w 宽度 / abilities 能力列表 / note 效果备注 ── */
+/* 价格统一由 TALENT_COST 决定（不在这里写 cost）；当前测试模式全部 0 ★，正式价见该表 */
+Reg.paddle('classic', {name:'标准挡板', icon:'▬', w:112, abilities:[],
+                       note:'基础挡板，无特殊能力。'});
+Reg.paddle('bouncy',  {name:'弹射挡板', icon:'⇈', w:112,
+                       abilities:[{t:'pulse', time:0.20, cd:0.30, heat:6, boost:4.0}],
+                       note:'左键 / J 激活弹性增强：持续 0.20 秒，结束后再冷却 0.30 秒。窗口内接到的球，先走碰板热度衰减，再额外 +6 热度 与 +4.0 加速度（约 1.3 秒衰减完）。'});
+Reg.paddle('wide',    {name:'宽挡板',   icon:'▭', w:165, abilities:[],
+                       note:'天生更宽的挡板（165px），但没有任何主动能力。'});
+
+/* ── 特殊挡板（当前测试模式 0 ★）──
+   magnet  : 全屏磁力牵引 + 落点预测虚线（总强度受 MAGNET_SCALE 控制，当前 50%）
+   random  : 每接 5 次额外弹出 2 颗随机类型小球
+   laser   : 小球飞行时长按左键从挡板中心连发，基础 1 点、连击升档
+   pierce  : 发球时穿透一次，撞墙即失效（与永久穿透的穿透球区分） */
+Reg.paddle('magnet', {name:'磁力挡板', icon:'🧲', w:112,
+  abilities:[{t:'magnet', force:19, floor:0.45, curve:1.5, spread:1.0, rise:0.3, dead:20, near:46}],
+  note:'全屏持续吸引下落中的小球：越靠近挡板吸力越强，最顶端也保留保底吸力（当前总强度为原版 50%，即磁力减半）。小球飞行时会画出虚线落点预测与落点箭头，提前看清会被吸到哪里。'});
+Reg.paddle('random', {name:'随机挡板', icon:'🎲', w:112,
+  abilities:[{t:'randomPaddle', per:5, count:2}],
+  note:'每被挡板接住 5 次，从挡板中心额外弹出 2 颗随机类型的小球（可能召出穿透球 / 增强球 / 灼热球）。召唤后计数归零重新累计，掉命也会重新计数。'});
+Reg.paddle('laser',  {name:'激光挡板', icon:'⚡', w:112,
+  abilities:[{t:'laserPaddle', rate:0.18, minCd:0.06, per:12, base:1, idleReset:2}],
+  note:'小球在飞行时，长按鼠标左键（或 J 键）从挡板中心连续发射激光：基础伤害 1 点；每命中 12 次升一档，伤害 ×2 → ×3（上限 ×3）。距上一次有效命中超过 2 秒，连击中断。'});
+Reg.paddle('pierce', {name:'穿透挡板', icon:'➤', w:112,
+  abilities:[{t:'pierce'}],
+  note:'每次发球获得一次穿透：穿过砖块与 BOSS 不反弹、不改方向，仍然结算伤害与热度；撞到任意墙壁后穿透失效，下次发球重新获得。'});
+
+/* ── 小球：r 半径 / color 基础色 / abilities ── */
+Reg.ball('classic', {name:'标准小球', icon:'●', r:8, abilities:[],
+                     note:'基础小球，完整使用动能蓄力机制。'});
+Reg.ball('heavy',   {name:'重球',     icon:'◉', r:11,
+                     abilities:[{t:'heavyBall', dmgMul:1.5, spdMul:0.85}],
+                     note:'体积更大：伤害 ×1.5，但球速 ×0.85。'});
+
+/* ── 特殊小球（当前测试模式 0 ★）──
+   pierceBall : 永久穿透砖块 / BOSS（撞墙不失效）
+   stackBall  : 每接 5 次基础伤害 +1，掉球后清零
+   burnBall   : 命中挂灼热（首次 40，再撞 +5），全屏小球掉光时统一引爆 */
+Reg.ball('pierceBall', {name:'穿透球', icon:'◈', r:8, color:'#e2e8ff',
+  abilities:[{t:'pierceBall'}],
+  note:'整颗球永久穿透：穿过砖块与 BOSS 不反弹、不改方向，仍然结算伤害与热度。每块砖 / 每次穿 BOSS 在同一趟里只结算一次，撞墙或接板后刷新命中记录，可以再次命中。'});
+Reg.ball('stackBall', {name:'增强球', icon:'✚', r:8, color:'#f472b6',
+  abilities:[{t:'stackBall', per:5, add:1}],
+  note:'每被挡板接住 5 次，基础伤害 +1（可无限叠加，并吃 1× / 2× / 3× 热度倍率）。球掉出屏幕、掉命或换关后，加成清零。'});
+Reg.ball('burnBall', {name:'灼热球', icon:'✹', r:8, color:'#fb923c',
+  abilities:[{t:'burn', dmg:40, stack:5}],
+  note:'撞到砖块 / BOSS 时挂上「灼热」：首次 40 点；已带灼热的目标每再被撞一次 +5（可无限叠加）。屏幕内所有小球全部掉落时，对所有带灼热的目标一次性结算该伤害。'});
+
+/* ── BOSS ── */
+Reg.boss('standard', {name:'标准 BOSS', w:150, h:46, hpBase:200, hpPerLevel:20,
+                      vxBase:1.3, vxPerLevel:0.12, fireBase:2.9, firePerLevel:0.18,
+                      note:'左右巡逻并向下开炮；命中挡板使其变窄 4 秒。血量低于 40% 进入狂暴。'});
+
+/* ── 掉落道具 ── */
+Reg.power('E', {name:'加宽挡板', color:'#22d3ee', weight:2});
+Reg.power('M', {name:'分裂多球', color:'#f472b6', weight:2});
+Reg.power('S', {name:'小球减速', color:'#a3e635', weight:2});
+Reg.power('L', {name:'增加生命', color:'#f87171', weight:1});
+Reg.power('G', {name:'激光炮台', color:'#fbbf24', weight:3});
+
+/* ── 能力模块：钩子在事件发生时被调用 ──
+   可用钩子：
+     onPaddleClick(pd)                    挡板被点击 / J 键
+     onBallPaddleHit(ball, pd) -> bool    球撞到挡板（返回 true 表示已处理热度衰减）
+     onBallSpawn(ball)                    小球创建时
+     onBallLaunch(ball)                   小球发球离板时（单球钩子，走 fireFor；穿透等一次性能力用）
+     onBallUpdate(ball, dt)               小球每帧
+     onBrickDestroy(brick)                砖块被击碎
+     onPaddleUpdate(pd, dt)               挡板每帧
+     onBallBrickHit(ball, brick, dmg)     小球撞到砖块（单球钩子，走 fireFor）
+     onBallBossHit(ball, boss, dmg)       小球撞到 BOSS（单球钩子，走 fireFor）
+     onBallWallHit(ball, axis)            小球撞到墙壁（单球钩子，走 fireFor）
+     onLifeLost()                         掉一条命 / 一轮结束时（用掉落小球的定义分发）
+   ───────────────────────────────────────────── */
+Reg.ability('pulse', {
+  onPaddleClick(pd) {
+    if (W.pulseT > 0 || W.pulseCd > 0) return false;
+    W.pulseT = C.PULSE_TIME;
+    W.pulseCd = C.PULSE_TIME + C.PULSE_CD;   // 效果结束之后才开始冷却
+    SFX.beep(980, .06, 'triangle', .04);
+    return true;
+  },
+  onBallPaddleHit(ball, pd) {
+    if (W.pulseT <= 0) return false;
+    Fx.decayHeat(ball);                                       // 1) 先正常衰减
+    ball.heat = Math.min(C.HEAT_MAX, (ball.heat || 0) + C.PULSE_HEAT); // 2) 再加热度
+    ball.boost = Math.min(C.PULSE_BOOST, (ball.boost || 0) + C.PULSE_BOOST);
+    Fx.burst(ball.x, pd.y, '#a3e635', 14);
+    W.shake = Math.min(W.shake + 4, 12);
+    SFX.beep(720, .06, 'triangle', .06);
+    return true;
+  }
+});
+Reg.ability('explode', {
+  onBrickDestroy(brick, ab) {
+    const R = ab.radius || 1, d = ab.dmg || 5;
+    const list = Level.neighbors(brick.gi, R);
+    for (const nb of list) Fx.damageBrick(nb, d, brick.cx, brick.cy);
+    Fx.burst(brick.cx, brick.cy, '#fb923c', 22);
+    W.shake = Math.min(W.shake + 8, 14);
+    SFX.beep(150, .18, 'sawtooth', .06);
+  }
+});
+Reg.ability('dropOnBreak', {
+  onBrickDestroy(brick, ab) { Fx.dropAt(brick.cx, brick.cy, brick.def, ab.force); }
+});
+Reg.ability('heavyBall', {
+  onBallSpawn(ball, ab) {
+    ball.dmgMul = ab.dmgMul || 1.5;   // 半径 r 来自 ball 定义
+    ball.spdMul = ab.spdMul || 0.85;
+  }
+});
+
+/* 磁力挡板（旧版 range / force 参数已废弃，现实现见下方 Reg.ability('magnet')）。 */
+/* ── 磁力总强度倍率 ──
+   这是磁力挡板唯一的「总开关」：最终吸力 = 原吸力 × MAGNET_SCALE。
+   0.5 = 磁力减半（曲线、衰减、保底比例都不变，只是整体力度减半）。
+   想改回原强度就把它改回 1；想再弱一点就调小（如 0.3）。
+   单个能力仍可用 ab.scale 覆盖这里的全局值（例如某块挡板要更弱）。 */
+const MAGNET_SCALE = 0.5;
+/* 激光挡板：从挡板中心发射激光。
+   两种操作方式：
+     长按左键  → 固定频率连发（rate 秒/发）
+     快速点击  → 可打断固定节奏，最快受 minCd 限制，点得越快发射越快
+   只在「小球已离开挡板」期间生效（待发射的球不算）。
+   伤害：基础 ab.base（默认 C.BASE_DMG；设为 1 即为「基础伤害 1」），
+        随激光【连击命中数】升档，档位倍率 ×1 / ×2 / ×3（上限 C.DMG_MAX）
+        每档所需命中数 = 小球加热度档位要求(HEAT_PER_D) × 4（默认 36 次）
+   连击规则（默认）：命中 +1，掉一条命或换关时归零。
+        idleReset=2  → 距上一次有效命中超过 2 秒（期间空枪也算）连击即中断归零；
+                       设为 0 可关闭这个保活倒计时
+        resetOnMiss=true  → 激光飞出屏幕未命中即归零（更严格的「连击」语义，
+                            实测长按连发时空枪很多，很难攒起来，故默认关闭）
+        resetOnHit=true   → 小球撞到挡板（回合结束）即归零
+   参数：rate=长按间隔(默认0.22) minCd=点击最快间隔(默认0.08)
+        per=每档所需连击数(默认 HEAT_PER_D*4=36) idleReset=保活秒数(默认2) */
+Reg.ability('laserPaddle', {
+  idleOf(ab) { return ab.idleReset != null ? +ab.idleReset : 2; },
+  st() {
+    return W.lpd || (W.lpd = {hold:false, tap:false, cd:0, combo:0, idle:0, deaths: W.deaths || 0});
+  },
+  perOf(ab) { return ab.per != null ? ab.per : C.HEAT_PER_D * 4; },
+  tierOf(st, ab) {
+    return Math.min(C.DMG_MAX, 1 + Math.floor(st.combo / this.perOf(ab)));
+  },
+  dmgOf(st, ab) { return (ab.base != null ? ab.base : C.BASE_DMG) * this.tierOf(st, ab); },
+
+  shoot(pd, ab) {
+    const st = this.st();
+    st.cd = ab.rate != null ? ab.rate : 0.22;
+    st.tap = false;
+    W.lasers.push({
+      x: pd.x + pd.w / 2, y: pd.y - 6, vy: -C.LASER_SPD,
+      dmg: this.dmgOf(st, ab), lpd: true, hit: false
+    });
+    SFX.beep(1180, .05, 'square', .035);
+    return true;
+  },
+
+  // 点击：把剩余冷却削到 minCd，从而实现「点得越快发射越快」
+  onPaddleClick(pd, ab) {
+    if (W.mode !== 'play') return;
+    const st = this.st();
+    st.tap = true;
+    const minCd = ab.minCd != null ? ab.minCd : 0.08;
+    if (st.cd > minCd) st.cd = minCd;
+    if (st.cd <= 0) this.shoot(pd, ab);
+  },
+
+  // 可选：小球撞到挡板（本回合结束）就清零，默认关闭
+  onBallPaddleHit(ball, pd, ab) {
+    if (ab && ab.resetOnHit && W.lpd) W.lpd.combo = 0;
+    return false;                                   // 不接管，仍走默认热度衰减
+  },
+
+  onPaddleUpdate(pd, dt, ab) {
+    const st = this.st();
+    // 掉一条命 → 连击归零（与小球热度在掉命后重开的语义一致）
+    if (st.deaths !== W.deaths) { st.deaths = W.deaths; st.combo = 0; st.idle = 0; }
+    // 鼠标长按 或 按住 J 键 都算「长按」
+    st.hold = !!W.ptrDown || !!W.keys['j'];
+    if (st.cd > 0) st.cd = Math.max(0, st.cd - dt);
+    if (W.mode !== 'play') return;
+    // 连击保活：距上一次「有效命中」超过 idleReset 秒就中断（空枪、停火都算）
+    const idleMax = this.idleOf(ab);
+    if (idleMax > 0 && st.combo > 0) {
+      st.idle = (st.idle || 0) + dt;
+      if (st.idle >= idleMax) { st.combo = 0; st.idle = 0; }
+    }
+    // 只有小球已离开挡板（即已发射、在飞行中）才允许开火
+    const away = W.balls.length > 0 && !W.balls.some(b => b.stick);
+    if (!away) { st.tap = false; return; }
+    if (!st.hold && !st.tap) return;
+    if (st.cd > 0) return;
+    this.shoot(pd, ab);
+  }
+});
+
+/* 磁力挡板：全屏范围内持续吸引下落中的小球，越靠近挡板越强，最顶端仍保留 floor 的保底强度。
+   只改方向、不改速率（牵引后重新归一化），所以不会越吸越快。
+   参数：
+     force  向「对准挡板」的目标速度靠拢的最大速率，默认 45；越大越跟手
+     floor  最顶端（屏幕最上方）的保底强度比例 0~1，默认 0.5
+     curve  强度随距离衰减的指数，默认 1.5（越大则越集中在近场）
+     spread 允许的横向速度上限 = 球速 × spread，默认 1.2（越小角度越平缓）
+     rise   小球上升时的吸力折扣 0~1，默认 0.35（保留一部分甩球控制权）
+     dead   水平死区 px，默认 20：已在挡板正上方时不拉（防止抵消防死锁随机偏角）
+     near   近场淡出距离 px，默认 46：贴近挡板时逐渐停止干预，保留出射角度
+     scale  总强度倍率，默认取全局 MAGNET_SCALE（当前 0.5 = 磁力减半）
+   强度公式：fall = (floor + (1 - floor) * u^curve) × scale，u = 1 - 距挡板距离 / 可用高度
+   ※ scale 写在 falloff 里统一乘，所以物理吸力、落点预测虚线、场域亮度会一起减半 */
+Reg.ability('magnet', {
+  // 距离 → 强度系数 0~1（1 = 贴着挡板，floor = 最顶端），已含总强度倍率
+  scaleOf(ab) { return ab.scale != null ? ab.scale : (typeof MAGNET_SCALE === 'number' ? MAGNET_SCALE : 1); },
+
+  falloff(dy, ab) {
+    const pd = W.paddle;
+    const H = Math.max(pd.y - C.TOP, 1);           // 挡板到顶部的可用高度
+    const u = U.clamp(1 - dy / H, 0, 1);           // 0 = 最顶端，1 = 贴板
+    const floor = ab.floor != null ? ab.floor : 0.50;
+    const curve = ab.curve != null ? ab.curve : 1.5;
+    const scale = this.scaleOf(ab);                // ← 磁力减半在这里生效
+    return U.clamp((floor + (1 - floor) * Math.pow(u, curve)) * scale, 0, 1);
+  },
+
+  onBallUpdate(ball, dt, ab) {
+    if (ball.stick) return;                        // 待发射的球不吸
+    const pd = W.paddle;
+    const dy = pd.y - ball.y;                      // 球在挡板上方多远
+    if (dy <= 0) return;                           // 已越过挡板
+    const dx = (pd.x + pd.w / 2) - ball.x;
+    // 死区：已经基本在挡板正上方就不拉，否则会抵消「正中接球给的随机偏角」，
+    // 让球陷入上下垂直死循环（实测会卡关）
+    if (Math.abs(dx) < (ab.dead != null ? ab.dead : 20)) return;
+    // 近场淡出：贴近挡板时不再干预，保留出射角度，避免来回震荡与垂直死循环
+    const nearFade = U.clamp((dy - (ab.near != null ? ab.near : 46)) / 90, 0, 1);
+    if (nearFade <= 0) return;
+
+    let fall = this.falloff(dy, ab) * nearFade;    // 全屏都有值，顶端 = floor
+    // 上升阶段打折：保留一部分「甩球打角落」的控制权，但吸力依然可见
+    if (ball.vy <= 0) fall *= (ab.rise != null ? ab.rise : 0.35);
+
+    // 目标水平速度：让球在剩余下落时间内刚好横向移动到挡板中心。
+    // 用「趋向目标速度」而不是「持续累加 vx」，可以避免强力下越过中心来回震荡（过冲）。
+    const tHit = dy / Math.max(Math.abs(ball.vy), 0.001);   // 还有多久落到挡板高度
+    let vxWant = dx / tHit;
+    const cap = Fx.ballSpeed(ball) * (ab.spread != null ? ab.spread : 1.2);
+    vxWant = U.clamp(vxWant, -cap, cap);           // 限制横向速度，避免角度过陡
+
+    // 每帧最多向目标靠拢 force*fall 的速度量（fall 越大越跟手）
+    const maxStep = (ab.force != null ? ab.force : 45) * fall * dt;
+    const step = U.clamp(vxWant - ball.vx, -maxStep, maxStep);
+    ball.vx += step;
+    Fx.applySpeed(ball);                           // 保持速率，只改方向
+    ball.mag = Math.max(ball.mag || 0, fall);      // 供渲染画牵引线
+  }
+});
+
+/* 灼热（小球能力）：小球撞到砖块 / BOSS 时给目标挂上「灼热」标记，
+   一轮结束（小球掉落没接住 → 掉一条命）时统一结算：对所有带标记的目标造成 burnDmg 伤害。
+   叠加规则：首次挂上 = ab.dmg（默认 40）；再撞到「已带灼热」的目标则 +ab.stack（默认 5），
+   可无限叠加，所以反复灼烧同一块砖 / BOSS 能把结算伤害越堆越高。
+   标记挂在目标对象本身（brick.burn / boss.burn），换关重建网格会自然清空。
+   参数：dmg=首次伤害（默认 40） stack=每次叠加量（默认 5） */
+Reg.ability('burn', {
+  dmgOf(ab)  { return ab.dmg   != null ? +ab.dmg   : 40; },
+  stackOf(ab){ return ab.stack != null ? +ab.stack : 5;  },
+
+  onBallBrickHit(ball, brick, dmg, ab) {
+    if (!brick) return;
+    if (brick.burn) {                                     // 已有灼热 → 叠加
+      brick.burnDmg = (brick.burnDmg || 0) + this.stackOf(ab);
+      Fx.pop(brick.cx, brick.cy - 8, '+' + this.stackOf(ab), '#fdba74');
+    } else {
+      brick.burn = true; brick.burnDmg = this.dmgOf(ab);   // 首次 → 基础伤害
+      Fx.burst(brick.cx, brick.cy, '#fb923c', 6);
+    }
+  },
+
+  onBallBossHit(ball, boss, dmg, ab) {
+    if (!boss) return;
+    if (boss.burn) {                                      // 已有灼热 → 叠加
+      boss.burnDmg = (boss.burnDmg || 0) + this.stackOf(ab);
+      Fx.pop(ball.x, ball.y - 14, '+' + this.stackOf(ab), '#fdba74');
+    } else {
+      boss.burn = true; boss.burnDmg = this.dmgOf(ab);
+      Fx.burst(ball.x, ball.y, '#fb923c', 6);
+    }
+  },
+
+  // 一轮结束：把灼热一次性引爆
+  onLifeLost(ab) {
+    const list = [];
+    for (const k of W.grid) if (k && k.burn) list.push(k);
+    if (!list.length && !(W.boss && W.boss.burn)) return;
+
+    for (const k of list) {
+      const d = k.burnDmg != null ? k.burnDmg : this.dmgOf(ab);
+      k.burn = false; k.burnDmg = 0;
+      Fx.pop(k.cx, k.cy - 6, '灼热 −' + d, '#fb923c');
+      Fx.damageBrick(k, d, k.cx, k.cy);
+    }
+    const B = W.boss;
+    if (B && B.burn) {
+      const d = B.burnDmg != null ? B.burnDmg : this.dmgOf(ab);
+      B.burn = false; B.burnDmg = 0;
+      const hy = B.y + B.h;
+      Fx.pop(B.x + B.w / 2, hy - 10, '灼热 −' + d, '#fb923c');
+      Fx.damageBoss(d, B.x + B.w / 2, hy);
+    }
+    W.shake = Math.min(W.shake + 6, 14);
+    SFX.beep(120, .22, 'sawtooth', .07);
+  }
+});
+
+/* 穿透（挡板能力）：只在「发球」时获得一次穿透，接球不再给。
+   穿透期间穿过砖块 / BOSS —— 仍然结算伤害与热度，但不反弹、不改方向；
+   撞到任意墙壁后穿透失效，本轮不再恢复（下次发球重新获得）。
+   每块砖在一次穿透期间只结算一次（pierceHits 记录 gi），避免穿一块砖刷满伤害。
+   参数：onHitKeep=true 可让撞墙后仍保留（默认 false） */
+Reg.ability('pierce', {
+  grant(ball) {
+    if (!ball) return;
+    ball.pierce = true;
+    ball.pierceHits = null;      // 清空上一轮的命中记录
+    ball.pierceBoss = false;
+  },
+  clear(ball) {
+    if (!ball) return;
+    ball.pierce = false;
+    ball.pierceHits = null;
+    ball.pierceBoss = false;
+  },
+
+  // 发球 → 获得一次穿透（接球不给）
+  onBallLaunch(ball, ab) {
+    this.grant(ball);
+    Fx.burst(ball.x, ball.y, '#e2e8ff', 10);
+    SFX.beep(920, .06, 'square', .035);
+  },
+
+  // 撞墙 → 穿透失效
+  onBallWallHit(ball, axis, ab) {
+    if (!ball.pierce) return;
+    if (ab && ab.onHitKeep) return;
+    this.clear(ball);
+    Fx.burst(ball.x, ball.y, '#94a3b8', 8);
+    SFX.beep(300, .05, 'triangle', .04);
+  },
+
+  // 生成时清掉状态，避免下一颗球带着穿透出生（穿透只在 launch 时发）
+  onBallSpawn(ball, ab) { this.clear(ball); }
+});
+
+/* 穿透球（小球能力）：整颗球永久穿透 —— 穿过砖块 / BOSS 不反弹、不改方向，
+   仍然结算伤害与热度；撞墙也不失效，只有这颗球掉出屏幕（掉命）才结束。
+   与「穿透挡板」的区别：挡板版只在发球时给一次、撞墙即失效；本模块是永久的。
+   为避免「一路穿过去把血刷满」，每块砖在一次「连穿段」里只结算一次，
+   撞墙或接板时清空命中记录（pierceHits），下一趟重新可打。
+   参数：无 */
+Reg.ability('pierceBall', {
+  grant(ball) {
+    if (!ball) return;
+    ball.pierce = true;
+    ball.pierceHits = null;      // 清空本段连穿的命中记录
+    ball.pierceBoss = false;
+  },
+
+  onBallSpawn(ball, ab)  { this.grant(ball); },
+  onBallLaunch(ball, ab) { this.grant(ball); },
+
+  // 撞墙：穿透不失效，只重置命中记录（否则第二趟就打不动砖了）
+  onBallWallHit(ball, axis, ab) { if (ball) this.grant(ball); },
+
+  // 接板：新的一趟开始，同样重置命中记录
+  onBallPaddleHit(ball, pd, ab) { if (ball) this.grant(ball); return false; }
+});
+
+/* 叠伤球（小球能力）：每被挡板接住 ab.per 次（默认 5），基础伤害 +ab.add（默认 1），
+   可无限成长；这颗球掉出屏幕（掉命）后重置 —— 计数挂在球身上，球没了自然清零，
+   换关 / 换球重新生成时也会归零。
+   实现方式是给球加 dmgAdd（附加基础伤害），与 C.BASE_DMG 一起吃 tier 倍率，
+   所以 tier=3 时实际是 +3×add。
+   参数：per=每几次接板涨一级（默认 5） add=每级加多少基础伤害（默认 1） */
+Reg.ability('stackBall', {
+  perOf(ab) { return ab.per != null ? +ab.per : 5; },
+  addOf(ab) { return ab.add != null ? +ab.add : 1; },
+
+  reset(ball) { if (ball) { ball.stackHits = 0; ball.dmgAdd = 0; } },
+
+  onBallSpawn(ball, ab) { this.reset(ball); },
+
+  onBallPaddleHit(ball, pd, ab) {
+    if (!ball) return false;
+    const per = this.perOf(ab), add = this.addOf(ab);
+    ball.stackHits = (ball.stackHits || 0) + 1;
+    if (per > 0 && ball.stackHits % per === 0) {
+      ball.dmgAdd = (ball.dmgAdd || 0) + add;
+      Fx.pop(ball.x, ball.y - 16, '基础伤害 +' + add, '#f472b6');
+      Fx.burst(ball.x, ball.y, '#f472b6', 12);
+      SFX.beep(760, .10, 'triangle', .05);
+    }
+    return false;                 // 不接管热度衰减
+  },
+
+  // 掉命：清掉残留计数（球本身会被销毁，这里兜住多球场景与换关）
+  onLifeLost(ab) { for (const b of W.balls) this.reset(b); }
+});
+
+/* 随机挡板（挡板能力）：被挡板接住 ab.per 次（默认 5）后，从挡板中心额外生成
+   ab.count 个（默认 2）「随机类型」的小球 —— 从注册表里随机挑一种小球定义，
+   所以可能召唤出灼热球 / 穿透球 / 叠伤球等，带上它们各自的能力。
+   生成后计数归零，重新累计；换关 / 掉命重置。
+   参数：per=接几次触发（默认 5） count=生成几个（默认 2）
+        pool=可选的 id 白名单，限定随机范围（默认全部小球） */
+Reg.ability('randomPaddle', {
+  st() { return W.rpd || (W.rpd = {hits: 0}); },
+  perOf(ab)   { return ab.per   != null ? +ab.per   : 5; },
+  countOf(ab) { return ab.count != null ? +ab.count : 2; },
+
+  pick(ab) {
+    let pool = Reg.list('ball');
+    if (Array.isArray(ab.pool) && ab.pool.length) {
+      const want = new Set(ab.pool);
+      pool = pool.filter(d => want.has(d.id));
+    }
+    if (!pool.length) return null;
+    return pool[(Math.random() * pool.length) | 0];
+  },
+
+  spawn(pd, ab) {
+    const n = this.countOf(ab);
+    const cx = pd.x + pd.w / 2, cy = pd.y - 14;
+    let made = 0;
+    for (let i = 0; i < n; i++) {
+      if (W.balls.length >= C.MAX_BALLS) break;
+      const d = this.pick(ab);
+      if (!d) break;
+      // 扇形散开向上发射，避免两颗球完全重合
+      const ang = -Math.PI / 2 + (i - (n - 1) / 2) * 0.42 + U.rnd(-0.08, 0.08);
+      const b = Physics.spawnBall(cx, cy, Math.cos(ang), Math.sin(ang), 0, d);
+      if (b) {
+        made++;
+        Fx.burst(cx, cy, d.color || '#c084fc', 10);
+        Fx.pop(cx, cy - 20, d.name, d.color || '#c084fc');
+      }
+    }
+    if (made) { W.shake = Math.min(W.shake + 5, 12); SFX.beep(880, .12, 'triangle', .06); }
+    return made;
+  },
+
+  onBallPaddleHit(ball, pd, ab) {
+    const st = this.st();
+    st.hits++;
+    if (st.hits < this.perOf(ab)) return false;
+    st.hits = 0;
+    this.spawn(pd, ab);
+    return false;                 // 不接管热度衰减
+  },
+
+  onLifeLost(ab) { const st = W.rpd; if (st) st.hits = 0; }
+});
+
+/* ══════════════════════════════════════════════════════════════
+   4. 关卡数据（字符网格 → 砖块类型）
+      字符映射由各砖块定义的 ch 字段决定
+   ══════════════════════════════════════════════════════════════ */
+const LEVELS = [
+  {name:'入门',   speed:5.0, boss:null, pat:[
+    '1111111111','1111111111','.11111111.']},
+  {name:'实心阵', speed:5.2, boss:'standard', pat:[
+    '2222222222','2222222222','1111111111','1111111111']},
+  {name:'金字塔', speed:5.4, boss:'standard', pat:[
+    '....33....','...3333...','..333333..','.33333333.','3333333333']},
+  {name:'棋盘',   speed:5.6, boss:'standard', pat:[
+    '3.3.3.3.3.','.3.3.3.3.3','2.2.2.2.2.','.2.2.2.2.2','1.1.1.1.1.']},
+  {name:'菱形',   speed:5.8, boss:'standard', pat:[
+    '....22....','..222222..','2222222222','..222222..','....22....']},
+  {name:'山峦',   speed:6.0, boss:'standard', pat:[
+    '....11....','...1111...','..111111..','.11111111.','1111111111','11.1111.11']},
+  {name:'双柱',   speed:6.2, boss:'standard', pat:[
+    '333....333','333....333','222....222','222....222','1111111111']},
+  {name:'心形',   speed:6.4, boss:'standard', pat:[
+    '.22....22.','2222222222','2222222222','.22222222.','..222222..','...2222...']},
+  {name:'十字',   speed:6.6, boss:'standard', pat:[
+    '...3333...','...3333...','3333333333','3333333333','...3333...','...3333...']},
+  {name:'波浪',   speed:6.8, boss:'standard', pat:[
+    '2222222222','2.2.2.2.2.','1111111111','.1.1.1.1.1','1111111111']},
+  {name:'堡垒',   speed:7.0, boss:'standard', pat:[
+    '3333333333','3.3.3.3.3.','2222222222','2.2.2.2.2.','1111111111','1111111111']},
+  {name:'终局',   speed:7.2, boss:'standard', pat:[
+    '3333333333','3333333333','2222222222','2222222222','1111111111','1111111111']}
+];
+const LV_COUNT = LEVELS.length;
+
+/* ══════════════════════════════════════════════════════════════
+   5. Canvas
+   ══════════════════════════════════════════════════════════════ */
+const CV = document.getElementById('game');
+const ctx = CV.getContext('2d');
+function fitDPR() {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  CV.width = C.W * dpr; CV.height = C.H * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+fitDPR();
+window.addEventListener('resize', fitDPR);
+
+/* ══════════════════════════════════════════════════════════════
+   6. 音效（Web Audio 合成，无外部文件）
+   ══════════════════════════════════════════════════════════════ */
+const SFX = (() => {
+  let ac = null, muted = false;
+  return {
+    resume() { if (ac && ac.state === 'suspended') ac.resume(); },
+    toggle() { muted = !muted; return muted; },
+    isMuted() { return muted; },
+    beep(freq, dur = 0.07, type = 'square', vol = 0.05) {
+      if (muted) return;
+      try {
+        if (!ac) ac = new (window.AudioContext || window.webkitAudioContext)();
+        const o = ac.createOscillator(), g = ac.createGain();
+        o.type = type; o.frequency.value = freq;
+        g.gain.setValueAtTime(vol, ac.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.0001, ac.currentTime + dur);
+        o.connect(g); g.connect(ac.destination);
+        o.start(); o.stop(ac.currentTime + dur);
+      } catch (e) {}
+    }
+  };
+})();
+
+/* ══════════════════════════════════════════════════════════════
+   7. 存档
+   ══════════════════════════════════════════════════════════════ */
+const SAVE_KEY = 'bb_save_v4';
+/* 回收站：清空 / 删除自制内容前自动存一份快照，之后可一键还原。
+   另外会扫描浏览器里残留的旧存档键（bb_save_v1/v2/v3…），把里面的自制内容抢救回来。 */
+const BIN_KEY = 'bb_custom_bin_v1';
+const BIN_MAX = 8;                       // 最多保留 8 份快照
+const DEFAULT_OWNED = ['paddle:classic', 'ball:classic'];
+const EMPTY_CUSTOM = () => ({bricks: [], balls: [], paddles: [], levels: []});
+const cloneCustom = c => ({
+  bricks: (c.bricks || []).map(o => JSON.parse(JSON.stringify(o))),
+  balls: (c.balls || []).map(o => JSON.parse(JSON.stringify(o))),
+  paddles: (c.paddles || []).map(o => JSON.parse(JSON.stringify(o))),
+  levels: (c.levels || []).map(o => JSON.parse(JSON.stringify(o)))
+});
+const countCustom = c => (c.bricks || []).length + (c.balls || []).length +
+                         (c.paddles || []).length + (c.levels || []).length;
+const Store = {
+  data: null,
+  load() {
+    const def = {
+      unlocked: 1, stars: {}, owned: DEFAULT_OWNED.slice(), spent: 0,
+      equip: {paddle:'classic', ball:'classic'}, custom: EMPTY_CUSTOM()
+    };
+    try {
+      const raw = JSON.parse(localStorage.getItem(SAVE_KEY) || '{}');
+      const c = EMPTY_CUSTOM();
+      // v3 的 custom 是关卡数组，迁移到 v4 的 custom.levels
+      if (Array.isArray(raw.custom)) c.levels = raw.custom;
+      else if (raw.custom) {
+        c.bricks = raw.custom.bricks || [];
+        c.balls = raw.custom.balls || [];
+        c.paddles = raw.custom.paddles || [];
+        c.levels = raw.custom.levels || [];
+      }
+      const d = {
+        unlocked: U.clamp(+raw.unlocked || 1, 1, LV_COUNT),
+        stars: raw.stars || {},
+        owned: Array.isArray(raw.owned) ? raw.owned.slice() : def.owned.slice(),
+        spent: +raw.spent || 0,
+        equip: Object.assign({}, def.equip, raw.equip || {}),
+        custom: c
+      };
+      for (const k of DEFAULT_OWNED) if (!d.owned.includes(k)) d.owned.push(k);
+      for (const slot of ['paddle', 'ball'])
+        if (!d.owned.includes(slot + ':' + d.equip[slot])) d.equip[slot] = 'classic';
+      this.data = d;
+    } catch (e) { this.data = def; }
+    return this.data;
+  },
+  save() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(this.data)); } catch (e) {} },
+  /* 重置：默认【保留】自制内容（砖块 / 小球 / 挡板 / 关卡），只清进度与天赋。
+     keepCustom = false 才是「连自制内容一起清空」，两者分开是为了避免辛苦捏的装备被误删。 */
+  reset(keepCustom) {
+    const keep = keepCustom !== false;
+    const old = this.data && this.data.custom;
+    if (!keep) this.snapshot('清空自制内容');            // 真要删之前先自动备份
+    const custom = keep && old
+      ? {bricks: old.bricks.slice(), balls: old.balls.slice(),
+         paddles: old.paddles.slice(), levels: old.levels.slice()}
+      : EMPTY_CUSTOM();
+    this.data = {unlocked:1, stars:{}, owned:DEFAULT_OWNED.slice(), spent:0,
+                 equip:{paddle:'classic', ball:'classic'}, custom};
+    this.save();
+    return {clearedCustom: !keep, kept: custom.bricks.length + custom.balls.length +
+            custom.paddles.length + custom.levels.length};
+  },
+  // 自制内容计数（用于确认框提示「将保留 N 项」）
+  customCount() {
+    const c = (this.data && this.data.custom) || EMPTY_CUSTOM();
+    return (c.bricks || []).length + (c.balls || []).length +
+           (c.paddles || []).length + (c.levels || []).length;
+  },
+  stars() { return Object.values(this.data.stars).reduce((a, b) => a + b, 0); },
+  spent() { return +this.data.spent || 0; },
+  usable() { return Math.max(0, this.stars() - this.spent()); },
+  // 该天赋的解锁价：条目自带的 cost 优先（编辑器可单独设），否则查 TALENT_COST 表
+  costOf(slot, def) {
+    const c = def && def.cost;
+    return (c != null && c !== '') ? +c || 0 : talentCost(slot, def ? def.id : '');
+  },
+  owns(slot, id) { return this.data.owned.includes(slot + ':' + id); },
+  equipOf(slot) { return this.data.equip[slot] || 'classic'; },
+  canUnlock(slot, def) { return this.costOf(slot, def) <= this.usable(); },
+  // 解锁 + 装备：星星不够会失败（调用方负责提示）
+  pick(slot, def) {
+    if (!this.owns(slot, def.id) && !this.unlock(slot, def)) return false;
+    this.data.equip[slot] = def.id; this.save(); return true;
+  },
+  unlock(slot, def) {
+    const cost = this.costOf(slot, def);
+    if (cost > this.usable()) return false;
+    this.data.spent += cost;
+    this.data.owned.push(slot + ':' + def.id);
+    this.save(); return true;
+  },
+  // 已解锁的天赋清单（用于展示「已拥有 N / 共 M」）
+  ownedCount(slot) {
+    return Reg.list(slot).filter(t => this.owns(slot, t.id)).length;
+  },
+  // 自定义内容的增删改
+  list(kind) { return this.data.custom[kind]; },
+  add(kind, obj) {
+    obj.id = obj.id || Custom.newId(kind);
+    this.data.custom[kind].push(obj);
+    this.save();
+    Custom.register(obj);          // 即时注册，调色板/选择器马上可用
+    return obj;
+  },
+  update(kind, idx, obj) {
+    this.data.custom[kind][idx] = obj;
+    this.save();
+    Custom.register(obj);
+  },
+  /* ── 回收站 ──
+     清空 / 删除前自动留一份快照；还原默认用「合并」，绝不覆盖现有条目 */
+  bin() {
+    try {
+      const raw = JSON.parse(localStorage.getItem(BIN_KEY) || '[]');
+      return Array.isArray(raw) ? raw : [];
+    } catch (e) { return []; }
+  },
+  saveBin(list) { try { localStorage.setItem(BIN_KEY, JSON.stringify(list.slice(0, BIN_MAX))); } catch (e) {} },
+  snapshot(reason) {
+    if (!this.data || countCustom(this.data.custom) === 0) return false;
+    const list = this.bin();
+    const snap = {at: Date.now(), reason: reason || '', custom: cloneCustom(this.data.custom)};
+    // 与最新一份完全一样就不重复存（例如连点两次清空）
+    const top = list[0];
+    if (top && JSON.stringify(top.custom) === JSON.stringify(snap.custom)) return false;
+    list.unshift(snap);
+    this.saveBin(list);
+    return true;
+  },
+  binRestore(i, mode) {
+    const list = this.bin();
+    const snap = list[i];
+    if (!snap) return null;
+    return this.mergeCustom(snap.custom, mode === 'replace');
+  },
+  binRemove(i) {
+    const list = this.bin();
+    if (list[i] == null) return;
+    list.splice(i, 1); this.saveBin(list);
+  },
+  binClear() { this.saveBin([]); },
+
+  /* 把一份 custom 数据并进当前存档。
+     replace=false（合并，默认）：同 id 覆盖、不同 id 追加，现有条目一个不丢。
+     replace=true：整体替换（会覆盖现有内容，需用户显式选择）。 */
+  mergeCustom(src, replace) {
+    if (!src || typeof src !== 'object') return null;
+    let added = 0, updated = 0;
+    for (const kind of ['bricks', 'balls', 'paddles', 'levels']) {
+      const incoming = src[kind] || [];
+      if (replace) { this.data.custom[kind] = cloneCustom({[kind]: incoming})[kind]; added += incoming.length; continue; }
+      const list = this.data.custom[kind];
+      for (const o of incoming) {
+        if (!o) continue;
+        const key = kind === 'levels' ? (o.name + '|' + (o.pat || []).join('')) : o.id;
+        const idx = key ? list.findIndex(x =>
+          (kind === 'levels' ? (x.name + '|' + (x.pat || []).join('')) : x.id) === key) : -1;
+        if (idx >= 0) { list[idx] = JSON.parse(JSON.stringify(o)); updated++; }
+        else { list.push(JSON.parse(JSON.stringify(o))); added++; }
+      }
+    }
+    this.save();
+    return {added, updated};
+  },
+
+  /* 扫描浏览器里残留的旧存档键，把里面的自制内容列出来供抢救。
+     只看 bb_ 开头的键，跳过当前存档键与回收站键本身，读不出来就跳过。 */
+  scanOldSaves() {
+    const out = [];
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (!k || !/^bb_/.test(k) || k === SAVE_KEY || k === BIN_KEY) continue;
+        let raw;
+        try { raw = JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { continue; }
+        if (!raw || typeof raw !== 'object') continue;
+        let c = raw.custom;
+        if (!c) continue;
+        if (Array.isArray(c)) c = {levels: c};                 // v3 及更早：custom 是关卡数组
+        const cc = {bricks: c.bricks || [], balls: c.balls || [],
+                    paddles: c.paddles || [], levels: c.levels || []};
+        if (countCustom(cc) === 0) continue;
+        out.push({key: k, at: raw.savedAt || 0, custom: cc});
+      }
+    } catch (e) {}
+    return out;
+  },
+  restoreOld(key) {
+    const hit = this.scanOldSaves().find(o => o.key === key);
+    if (!hit) return null;
+    return this.mergeCustom(hit.custom, false);
+  },
+
+  remove(kind, idx) {
+    const o = this.data.custom[kind][idx];
+    if (!o) return;
+    this.snapshot('删除「' + (o.name || o.id) + '」');   // 删之前先留备份
+    this.data.custom[kind].splice(idx, 1);
+    const table = Custom.table(kind);
+    if (table && o.id) {
+      Reg.remove(table, o.id);
+      const slot = Custom.slotOf(kind);
+      if (this.data.equip[slot] === o.id) this.data.equip[slot] = 'classic';
+    }
+    this.save();
+  }
+};
+
+/* ══════════════════════════════════════════════════════════════
+   8. 世界状态（运行时）
+   ══════════════════════════════════════════════════════════════ */
+const W = {
+  mode: 'ready',            // ready | play | pause | over | clear | select
+  score: 0, best: 0, level: 1, lives: 3, combo: 0, deaths: 0,
+  src: null,                // 当前关卡数据对象
+  paddle: {x: 344, y: C.PADDLE_Y, w: C.PW, def: null, pulseT: 0, pulseCd: 0},
+  pd: null,                 // 挡板定义
+  balls: [], drops: [], lasers: [], ebullets: [],
+  grid: [], gcount: 0,      // 砖块空间网格（替代数组遍历）
+  boss: null,
+  bd: null,                 // 本关使用的小球定义（关卡指定 > 全局装备）
+  eff: {expand: 0, slow: 0, laser: 0},
+  narrow: 0, fireCd: 0,
+  pulseT: 0, pulseCd: 0,    // 弹射挡板计时（能力模块读写）
+  shake: 0, keys: {},
+  t: 0,                     // 累计游戏时间（秒），供动画相位使用
+  ptrDown: false,           // 鼠标左键是否按住（激光挡板长按连发用）
+  lpd: null,                // 激光挡板状态 {hold,tap,cd,combo}
+  rpd: null,                // 随机挡板状态 {hits}：累计接球次数
+  lostDefs: [],             // 本轮掉落小球的定义（掉命时用它分发 onLifeLost）
+  parts: [], partHead: 0,   // 粒子池
+  pops: [], popHead: 0      // 伤害飘字池
+};
+
+/* ══════════════════════════════════════════════════════════════
+   9. 关卡模块：解析 / 序列化 / 空间网格
+   ══════════════════════════════════════════════════════════════ */
+const Level = {
+  charMap() {                       // 字符 → 砖块 id，来自各砖块定义的 ch
+    const m = {'.': null};
+    for (const b of Reg.list('brick')) if (b.ch) m[b.ch] = b.id;
+    return m;
+  },
+  colX(c) { return C.MARGIN + c * (C.BW + C.GAP); },
+  rowY(r) { return C.TOP + r * (C.BH + C.GAP); },
+
+  // 把关卡数据装载进网格
+  load(src) {
+    W.src = src;
+    W.grid = new Array(C.COLS * C.ROWS_MAX).fill(null);
+    W.gcount = 0;
+    const map = this.charMap();
+    const pat = src.pat || [];
+    for (let r = 0; r < pat.length && r < C.ROWS_MAX; r++) {
+      const line = pat[r];
+      for (let c = 0; c < C.COLS; c++) {
+        const id = map[line[c]];
+        if (!id) continue;
+        const def = Reg.brick(id);
+        const gi = r * C.COLS + c;
+        W.grid[gi] = {
+          gi, def, hp: def.hp, max: def.hp,
+          x: this.colX(c), y: this.rowY(r),
+          cx: this.colX(c) + C.BW / 2, cy: this.rowY(r) + C.BH / 2
+        };
+        W.gcount++;
+      }
+    }
+    // BOSS
+    W.boss = null;
+    if (src.boss) {
+      const bd = Reg.boss(src.boss);
+      const bw = bd.w, bh = bd.h;
+      const rows = pat.length;
+      const max = src.bossHp || (bd.hpBase + W.level * bd.hpPerLevel);
+      W.boss = {
+        def: bd, x: (C.W - bw) / 2, y: Math.min(this.rowY(rows) + 40, C.H - 190),
+        w: bw, h: bh, hp: max, max: max,
+        vx: (bd.vxBase + W.level * bd.vxPerLevel) * (Math.random() < .5 ? -1 : 1),
+        cd: 2.4, flash: 0
+      };
+    }
+  },
+
+  // 邻域查询（用于爆破等范围能力）
+  neighbors(gi, radius) {
+    const out = [];
+    const r0 = (gi / C.COLS) | 0, c0 = gi % C.COLS;
+    for (let r = r0 - radius; r <= r0 + radius; r++) {
+      if (r < 0 || r >= C.ROWS_MAX) continue;
+      for (let c = c0 - radius; c <= c0 + radius; c++) {
+        if (c < 0 || c >= C.COLS) continue;
+        if (r === r0 && c === c0) continue;
+        const b = W.grid[r * C.COLS + c];
+        if (b) out.push(b);
+      }
+    }
+    return out;
+  },
+
+  // 球所在位置附近的候选砖块（空间网格裁剪，避免全表遍历）
+  candidates(bx, by, r) {
+    const out = [];
+    const rTop = Math.floor((by - r - C.TOP) / (C.BH + C.GAP));
+    const rBot = Math.floor((by + r - C.TOP) / (C.BH + C.GAP));
+    const cL = Math.floor((bx - r - C.MARGIN) / (C.BW + C.GAP));
+    const cR = Math.floor((bx + r - C.MARGIN) / (C.BW + C.GAP));
+    for (let rr = rTop; rr <= rBot; rr++) {
+      if (rr < 0 || rr >= C.ROWS_MAX) continue;
+      for (let cc = cL; cc <= cR; cc++) {
+        if (cc < 0 || cc >= C.COLS) continue;
+        const b = W.grid[rr * C.COLS + cc];
+        if (b) out.push(b);
+      }
+    }
+    return out;
+  },
+
+  // 序列化：网格 → 字符图案
+  serialize() {
+    const pat = [];
+    const idMap = {};
+    for (const b of Reg.list('brick')) if (b.ch) idMap[b.id] = b.ch;
+    for (let r = 0; r < C.ROWS_MAX; r++) {
+      let line = '';
+      for (let c = 0; c < C.COLS; c++) {
+        const b = W.grid[r * C.COLS + c];
+        line += b ? (idMap[b.def.id] || '.') : '.';
+      }
+      pat.push(line);
+    }
+    // 去掉尾部空行
+    while (pat.length && !/[^.]/.test(pat[pat.length - 1])) pat.pop();
+    return pat;
+  }
+};
+
+/* ══════════════════════════════════════════════════════════════
+   10. 效果函数（Fx）—— 供能力模块与物理循环调用
+   ══════════════════════════════════════════════════════════════ */
+const Fx = {
+  /* ── 粒子对象池：零 GC ── */
+  initParts() {
+    W.parts = new Array(C.PART_MAX);
+    for (let i = 0; i < C.PART_MAX; i++)
+      W.parts[i] = {x:0, y:0, vx:0, vy:0, life:0, color:'#fff', size:2};
+    W.partHead = 0;
+    W.pops = new Array(C.POP_MAX);
+    for (let i = 0; i < C.POP_MAX; i++) W.pops[i] = {x:0, y:0, text:'', color:'#fff', life:0, vy:0};
+    W.popHead = 0;
+  },
+  // 伤害飘字：在命中处冒出「-3」这样的数字，让低伤害也看得见
+  pop(x, y, text, color) {
+    const p = W.pops[W.popHead];
+    W.popHead = (W.popHead + 1) % C.POP_MAX;
+    p.x = x; p.y = y; p.text = text; p.color = color || '#fff';
+    p.life = 1; p.vy = -0.55;
+    return p;
+  },
+  stepPops(dt) {
+    const ts = dt * 60;
+    for (let i = 0; i < C.POP_MAX; i++) {
+      const p = W.pops[i];
+      if (p.life <= 0) continue;
+      p.y += p.vy * ts;
+      p.vy *= 0.97;
+      p.life -= 0.026 * ts;
+    }
+  },
+
+  burst(x, y, color, n = 10) {
+    for (let i = 0; i < n; i++) {
+      const p = W.parts[W.partHead];
+      W.partHead = (W.partHead + 1) % C.PART_MAX;
+      const a = Math.random() * Math.PI * 2, sp = U.rnd(1, 4.4);
+      p.x = x; p.y = y; p.vx = Math.cos(a) * sp; p.vy = Math.sin(a) * sp - 1;
+      p.life = 1; p.color = color; p.size = U.rnd(2, 5);
+    }
+  },
+  stepParts(dt) {
+    const ts = dt * 60;
+    for (let i = 0; i < C.PART_MAX; i++) {
+      const p = W.parts[i];
+      if (p.life <= 0) continue;
+      p.x += p.vx * ts; p.y += p.vy * ts;
+      p.vy += 0.12 * ts; p.vx *= 0.99;
+      p.life -= 0.022 * ts;
+    }
+  },
+
+  /* ── 动能蓄力 ── */
+  tier(b)  { return U.clamp(1 + Math.floor((b.heat || 0) / C.HEAT_PER_D), 1, C.DMG_MAX); },
+  // dmgAdd = 附加「基础伤害」（叠伤球用），与 BASE_DMG 一起吃 tier 倍率
+  damage(b){ return this.tier(b) * (C.BASE_DMG + (b.dmgAdd || 0)) * (b.dmgMul || 1); },
+  addHeat(b){ b.heat = Math.min(C.HEAT_MAX, (b.heat || 0) + C.HEAT_BASE * (1 + (b.heat || 0) * C.HEAT_COMP)); },
+  decayHeat(b){ b.heat = Math.max(0, (b.heat || 0) * C.PADDLE_KEEP - C.PADDLE_LOSS); },
+  heatFrac(b) {
+    const t = this.tier(b);
+    if (t >= C.DMG_MAX) return 1;
+    return U.clamp(((b.heat || 0) - (t - 1) * C.HEAT_PER_D) / C.HEAT_PER_D, 0, 1);
+  },
+  baseSpeed() {
+    const s = (W.src && W.src.speed) || 5.0;
+    return s * (W.eff.slow > 0 ? 0.68 : 1);
+  },
+  ballSpeed(b) {
+    const mul = 1 + Math.min(1, (b.heat || 0) / C.HEAT_MAX) * C.SPD_BOOST;
+    const sp = this.baseSpeed() * mul * (b.spdMul || 1) + (b.boost || 0);
+    return Math.min(C.SPD_CAP, sp);
+  },
+  applySpeed(b) {
+    const cur = Math.hypot(b.vx, b.vy);
+    if (cur < 1e-4) return;
+    const k = this.ballSpeed(b) / cur;
+    b.vx *= k; b.vy *= k;
+  },
+
+  /* ── 砖块伤害 / 击碎 ── */
+  damageBrick(bk, dmg, hx, hy) {
+    if (!bk || bk.hp <= 0) return;
+    bk.hp -= dmg;
+    W.combo++;
+    W.score += Math.round(bk.def.score * (1 + Math.min(W.combo, 10) * 0.1));
+    this.burst(bk.cx, bk.cy, bk.def.color, bk.hp > 0 ? 5 : 12);
+    W.shake = Math.min(W.shake + 3, 13);
+    SFX.beep(520 + W.combo * 40, .05, 'sine');
+    if (bk.hp <= 0) this.destroyBrick(bk);
+    UI.hud();
+  },
+  destroyBrick(bk) {
+    if (!W.grid[bk.gi]) return;       // 防重入
+    W.grid[bk.gi] = null;
+    W.gcount--;
+    // 触发砖块能力
+    for (const ab of (bk.def.abilities || [])) {
+      const mod = Reg.ability(ab.t);
+      if (mod && mod.onBrickDestroy) mod.onBrickDestroy(bk, ab);
+    }
+    this.dropAt(bk.cx, bk.cy, bk.def, false);
+  },
+
+  /* ── 道具 ── */
+  // drops 优先用砖块自带的「各技能掉落几率」，否则退回全局概率
+  dropAt(x, y, brickDef, force) {
+    const own = brickDef && brickDef.drops;
+    const keys = own ? Object.keys(own).filter(k => own[k] > 0) : [];
+    if (keys.length) {
+      for (const k of keys) {
+        if (!Reg.power(k)) continue;
+        if (Math.random() < own[k]) this.spawnDrop(x, y, k);
+      }
+      if (!force) return;
+    }
+    if (!force && Math.random() > C.DROP_RATE) return;
+    const list = Reg.list('power').filter(p => p.weight > 0);
+    let total = 0;
+    for (const p of list) total += p.weight;
+    let r = Math.random() * total;
+    let chosen = list[0];
+    for (const p of list) { r -= p.weight; if (r <= 0) { chosen = p; break; } }
+    this.spawnDrop(x, y, chosen.id);
+  },
+  spawnDrop(x, y, key) {
+    const def = Reg.power(key);
+    if (!def) return;
+    W.drops.push({x: x - 13, y, w: 26, h: 20, k: key, vy: 2.1, def});
+  },
+  applyPower(id) {
+    const def = Reg.power(id);
+    SFX.beep(760, .1, 'triangle', .07);
+    this.burst(W.paddle.x + W.paddle.w / 2, W.paddle.y, def.color, 14);
+    switch (id) {
+      case 'E': W.eff.expand = 9; W.narrow = 0; break;
+      case 'S': W.eff.slow = 7; break;
+      case 'L': W.lives = Math.min(W.lives + 1, 6); break;
+      case 'G': W.eff.laser = 5; break;
+      case 'M': {
+        const src = W.balls.slice(0, 3);
+        for (const b of src) {
+          for (const dir of [-0.45, 0.45]) {
+            if (W.balls.length >= C.MAX_BALLS) break;
+            const a = Math.atan2(b.vy, b.vx) + dir;
+            Physics.spawnBall(b.x, b.y, Math.cos(a), Math.sin(a), (b.heat || 0) * 0.5, b.def);
+          }
+        }
+        break;
+      }
+    }
+    UI.hud();
+  },
+
+  /* ── 能力分发 ── */
+  // 单球钩子：挡板能力与「该球」自身能力，签名统一为 (ball, ...args, ab)。
+  // 不能用 fire()，否则 fire 内部会再遍历一遍所有球，导致参数错位与重复调用。
+  // 返回值：任一能力返回 true 表示它已接管（例如弹射挡板自己处理热度衰减），
+  // 这样接板逻辑可以「只结算碰到挡板的那颗球」，多球时不会互相叠加增强球层数。
+  fireFor(ball, hook, ...args) {
+    let handled = false;
+    const pdAb = (W.pd && W.pd.abilities) || [];
+    for (const ab of pdAb) {
+      const m = Reg.ability(ab.t);
+      if (m && m[hook] && m[hook](ball, ...args, ab) === true) handled = true;
+    }
+    const bdAb = (ball.def && ball.def.abilities) || [];
+    for (const ab of bdAb) {
+      const m = Reg.ability(ab.t);
+      if (m && m[hook] && m[hook](ball, ...args, ab) === true) handled = true;
+    }
+    return handled;
+  },
+
+  // 按「某一条定义」分发（用于球已不存在、但仍要用它的能力结算的场合，如掉命）
+  fireDef(def, hook, ...args) {
+    for (const ab of ((def && def.abilities) || [])) {
+      const m = Reg.ability(ab.t);
+      if (m && m[hook]) m[hook](...args, ab);
+    }
+  },
+
+  fire(hook, ...args) {
+    const pdAb = (W.pd && W.pd.abilities) || [];
+    for (const ab of pdAb) {
+      const m = Reg.ability(ab.t);
+      if (m && m[hook]) { if (m[hook](...args, ab) === true) return true; }
+    }
+    for (const b of W.balls) {
+      const bdAb = (b.def && b.def.abilities) || [];
+      for (const ab of bdAb) {
+        const m = Reg.ability(ab.t);
+        if (m && m[hook]) m[hook](b, ...args, ab);
+      }
+    }
+    return false;
+  }
+};
+
+/* ══════════════════════════════════════════════════════════════
+   11. 物理
+   ══════════════════════════════════════════════════════════════ */
+const Physics = {
+  ballDef() { return W.bd || Reg.ball(Store.equipOf('ball')); },
+  spawnBall(x, y, dx, dy, heat, def) {
+    const d = def || this.ballDef();
+    const b = {
+      x, y, r: d.r, vx: 0, vy: 0, stick: false,
+      heat: heat || 0, boost: 0, dmgMul: 1, spdMul: 1,
+      def: d, trail: []
+    };
+    const sp = Fx.ballSpeed(b);
+    const len = Math.hypot(dx, dy) || 1;
+    b.vx = dx / len * sp; b.vy = dy / len * sp;
+    // 触发小球能力（可改写 dmgMul / spdMul / r 等）
+    for (const ab of (d.abilities || [])) {
+      const m = Reg.ability(ab.t);
+      if (m && m.onBallSpawn) m.onBallSpawn(b, ab);
+    }
+    Fx.applySpeed(b);              // 能力改过 spdMul 后重算初速
+    W.balls.push(b);
+    return b;
+  },
+
+  resetBall() {
+    W.balls.length = 0;
+    const d = this.ballDef();
+    const b = {
+      x: W.paddle.x + W.paddle.w / 2, y: W.paddle.y - 12,
+      r: d.r, vx: 0, vy: 0, stick: true, heat: 0, boost: 0,
+      dmgMul: 1, spdMul: 1, def: d, trail: []
+    };
+    // 待发射的球也要走能力钩子，否则换球后第一颗不生效
+    for (const ab of (d.abilities || [])) {
+      const m = Reg.ability(ab.t);
+      if (m && m.onBallSpawn) m.onBallSpawn(b, ab);
+    }
+    W.balls.push(b);
+  },
+
+  launch() {
+    let any = false;
+    for (const b of W.balls) {
+      if (!b.stick) continue;
+      any = true; b.stick = false;
+      const ang = U.rnd(-0.3, 0.3);
+      const sp = Fx.ballSpeed(b);
+      b.vx = sp * Math.sin(ang);
+      b.vy = -Math.abs(sp * Math.cos(ang));
+      Fx.fireFor(b, 'onBallLaunch');        // 发球：穿透等一次性能力在此发放
+    }
+    if (any) SFX.beep(660, .06, 'triangle');
+  },
+
+  // 单球推进：变步长 substep，每步都按当前速度取方向（防止反弹后残留位移导致重复结算）
+  ballStep(b, dt) {
+    if (b.stick) {
+      b.x = W.paddle.x + W.paddle.w / 2;
+      b.y = W.paddle.y - b.r - 2;
+      return;
+    }
+    let remain = Math.hypot(b.vx, b.vy) * dt * 60;
+    let guard = 0;
+    while (remain > 1e-4 && guard++ < 32) {
+      const sp = Math.hypot(b.vx, b.vy) || 1;
+      const d = Math.min(remain, 3);
+      b.x += b.vx / sp * d;
+      b.y += b.vy / sp * d;
+      remain -= d;
+
+      // 墙壁
+      if (b.x - b.r < 0)     { b.x = b.r;     b.vx =  Math.abs(b.vx); SFX.beep(420, .04); Fx.fireFor(b, 'onBallWallHit', 'x'); }
+      if (b.x + b.r > C.W)   { b.x = C.W - b.r; b.vx = -Math.abs(b.vx); SFX.beep(420, .04); Fx.fireFor(b, 'onBallWallHit', 'x'); }
+      if (b.y - b.r < 0)     { b.y = b.r;     b.vy =  Math.abs(b.vy); SFX.beep(420, .04); Fx.fireFor(b, 'onBallWallHit', 'y'); }
+
+      // 挡板
+      const pd = W.paddle;
+      if (b.vy > 0 && b.y + b.r >= pd.y && b.y - b.r <= pd.y + C.PADDLE_H &&
+          b.x >= pd.x - b.r && b.x <= pd.x + pd.w + b.r) {
+        b.y = pd.y - b.r;
+        let hit = (b.x - (pd.x + pd.w / 2)) / (pd.w / 2);
+        if (Math.abs(hit) < 0.1) hit = U.sign(Math.random() - .5) * U.rnd(0.1, 0.25);
+        hit = U.clamp(hit, -1, 1);
+        const ang = hit * (Math.PI / 3);
+        // 只分发给「碰到挡板的这颗球」，否则多球时一颗接板会让所有增强球都加层
+        if (!Fx.fireFor(b, 'onBallPaddleHit', pd)) Fx.decayHeat(b);
+        const spd = Fx.ballSpeed(b);
+        b.vx = spd * Math.sin(ang);
+        b.vy = -Math.abs(spd * Math.cos(ang));
+        W.combo = 0; UI.hud();
+        if (!(W.pulseT > 0)) SFX.beep(300 + Math.abs(hit) * 200, .05, 'triangle');
+      }
+
+      // 砖块（空间网格裁剪 + 只结算仍在靠近的轴）
+      const cands = Level.candidates(b.x, b.y, b.r);
+      for (const k of cands) {
+        if (b.x + b.r < k.x || b.x - b.r > k.x + C.BW ||
+            b.y + b.r < k.y || b.y - b.r > k.y + C.BH) continue;
+        // 穿透中：不反弹，每块砖只结算一次伤害，然后继续前进
+        if (b.pierce) {
+          if (!b.pierceHits) b.pierceHits = new Set();
+          if (b.pierceHits.has(k.gi)) continue;
+          b.pierceHits.add(k.gi);
+          const pdmg = Math.round(Fx.damage(b));
+          Fx.addHeat(b);
+          Fx.applySpeed(b);
+          Fx.fireFor(b, 'onBallBrickHit', k, pdmg);
+          Fx.damageBrick(k, pdmg, b.x, b.y);
+          continue;                                  // 穿过，不 break
+        }
+        const ddx = b.x - k.cx, ddy = b.y - k.cy;
+        const penX = C.BW / 2 + b.r - Math.abs(ddx);
+        const penY = C.BH / 2 + b.r - Math.abs(ddy);
+        const nearX = b.vx * ddx < 0, nearY = b.vy * ddy < 0;
+        if (!nearX && !nearY) continue;                  // 已在离开，不重复结算
+        const axisX = penX < penY ? nearX : !nearY;
+        if (axisX) { b.vx = -b.vx; b.x = k.cx + U.sign(ddx) * (C.BW / 2 + b.r + 0.01); }
+        else       { b.vy = -b.vy; b.y = k.cy + U.sign(ddy) * (C.BH / 2 + b.r + 0.01); }
+        const dmg = Math.round(Fx.damage(b));
+        Fx.addHeat(b);
+        Fx.applySpeed(b);
+        Fx.fireFor(b, 'onBallBrickHit', k, dmg);   // 先挂 buff，再结算伤害（打碎了标记自然作废）
+        Fx.damageBrick(k, dmg, b.x, b.y);
+        break;
+      }
+
+      // BOSS
+      const B = W.boss;
+      if (B && cands.length === 0) {
+        if (b.x + b.r > B.x && b.x - b.r < B.x + B.w && b.y + b.r > B.y && b.y - b.r < B.y + B.h) {
+          // 穿透中：不反弹，一次穿透只结算一次伤害
+          if (b.pierce) {
+            if (!b.pierceBoss) {
+              b.pierceBoss = true;
+              const pdmg = Math.round(Fx.damage(b));
+              Fx.addHeat(b); Fx.applySpeed(b);
+              Fx.fireFor(b, 'onBallBossHit', B, pdmg);
+              Fx.damageBoss(pdmg, b.x, b.y);
+            }
+          } else {
+          const cx = B.x + B.w / 2, cy = B.y + B.h / 2;
+          const ddx = b.x - cx, ddy = b.y - cy;
+          const penX = B.w / 2 + b.r - Math.abs(ddx);
+          const penY = B.h / 2 + b.r - Math.abs(ddy);
+          const nearX = b.vx * ddx < 0, nearY = b.vy * ddy < 0;
+          if (nearX || nearY) {
+            const axisX = penX < penY ? nearX : !nearY;
+            if (axisX) { b.vx = -b.vx; b.x = cx + U.sign(ddx) * (B.w / 2 + b.r + 0.01); }
+            else       { b.vy = -b.vy; b.y = cy + U.sign(ddy) * (B.h / 2 + b.r + 0.01); }
+            const dmg = Math.round(Fx.damage(b));
+            Fx.addHeat(b); Fx.applySpeed(b);
+            Fx.fireFor(b, 'onBallBossHit', B, dmg);
+            Fx.damageBoss(dmg, b.x, b.y);
+          }
+          }
+        }
+      }
+    }
+
+    // 拖尾
+    b.trail.push(b.x, b.y);
+    const tmax = (10 + Math.round((b.heat || 0) / C.HEAT_MAX * 14)) * 2;
+    while (b.trail.length > tmax) b.trail.splice(0, 2);
+  },
+
+  damageBoss(dmg, hx, hy) {
+    const B = W.boss; if (!B) return;
+    B.hp -= dmg; B.flash = 1;
+    W.combo++;
+    W.score += Math.round(12 * (1 + Math.min(W.combo, 10) * 0.1));
+    Fx.burst(hx, hy, B.hp <= B.max * 0.4 ? '#ef4444' : '#f59e0b', 6);
+    W.shake = Math.min(W.shake + 2 + dmg * 0.1, 12);
+    SFX.beep(240 + (B.max - B.hp) * 4, .05, 'sawtooth', .05);
+    if (B.hp <= 0) {
+      const cx = B.x + B.w / 2, cy = B.y + B.h / 2;
+      W.score += 400 + W.level * 120;
+      for (let i = 0; i < 6; i++)
+        Fx.burst(cx + U.rnd(-B.w / 2, B.w / 2), cy + U.rnd(-B.h / 2, B.h / 2),
+                 ['#f59e0b', '#ef4444', '#fde047'][i % 3], 16);
+      W.shake = 14;
+      SFX.beep(180, .3, 'sawtooth', .08);
+      const pool = ['G', 'M', 'E', 'L'];
+      for (let i = 0; i < 3; i++)
+        W.drops.push({x: cx - 40 + i * 34, y: cy, w: 26, h: 20, k: pool[i], vy: 2.1, def: Reg.power(pool[i])});
+      W.boss = null;
+    }
+    UI.hud();
+  },
+
+  fireLaser() {
+    if (W.eff.laser <= 0 || W.fireCd > 0) return;
+    W.fireCd = C.LASER_CD;
+    const y = W.paddle.y - 6;
+    for (const off of [10, W.paddle.w - 10]) W.lasers.push({x: W.paddle.x + off, y, vy: -C.LASER_SPD});
+    SFX.beep(1180, .05, 'square', .035);
+  },
+
+  /* ── 主步进 ── */
+  step(dt) {
+    const ts = dt * 60, sec = dt;
+
+    // 键盘移动
+    const kb = (W.keys['arrowright'] || W.keys['d'] ? 1 : 0) - (W.keys['arrowleft'] || W.keys['a'] ? 1 : 0);
+    if (kb) W.paddle.x = U.clamp(W.paddle.x + kb * 8.4 * ts, 0, C.W - W.paddle.w);
+
+    // 计时器
+    for (const k in W.eff) if (W.eff[k] > 0) W.eff[k] = Math.max(0, W.eff[k] - sec);
+    if (W.narrow > 0)  W.narrow  = Math.max(0, W.narrow - sec);
+    if (W.fireCd > 0)  W.fireCd  = Math.max(0, W.fireCd - sec);
+    if (W.pulseT > 0)  W.pulseT  = Math.max(0, W.pulseT - sec);
+    if (W.pulseCd > 0) W.pulseCd = Math.max(0, W.pulseCd - sec);
+
+    // 挡板宽度
+    const pdDef = W.pd || Reg.paddle('classic');
+    W.paddle.w = W.narrow > 0 ? 68 : (W.eff.expand > 0 ? 190 : pdDef.w);
+    W.paddle.x = Math.min(W.paddle.x, C.W - W.paddle.w);
+
+    W.t += sec;
+    for (const b of W.balls) if (b.boost > 0) b.boost = Math.max(0, b.boost - C.BOOST_DECAY * sec);
+    Fx.stepParts(dt);
+    Fx.stepPops(dt);
+
+    if (W.mode !== 'play') return;
+
+    // 每帧钩子：先清 mag（渲染用），再分发，最后推进
+    for (const b of W.balls) b.mag = 0;
+    for (const b of W.balls) Fx.fireFor(b, 'onBallUpdate', dt);   // → m(ball, dt, ab)
+    Fx.fire('onPaddleUpdate', W.paddle, dt);
+
+    for (const b of W.balls) this.ballStep(b, dt);
+
+    // 掉球：记住掉落小球的定义，掉命时用它分发 onLifeLost（此时 W.balls 已空，fire() 遍历不到）
+    W.lostDefs = W.lostDefs || [];
+    for (let i = W.balls.length - 1; i >= 0; i--)
+      if (W.balls[i].y - W.balls[i].r > C.H + 20) {
+        if (W.balls[i].def) W.lostDefs.push(W.balls[i].def);
+        W.balls.splice(i, 1);
+      }
+
+    if (W.balls.length === 0) {
+      // 一轮结束：按掉落小球的定义触发 onLifeLost（灼热在此结算）
+      // 多球同时掉光会 push 进多个同 id 的定义，去重后只结算一次
+      const seen = new Set();
+      for (const d of W.lostDefs) {
+        if (!d || seen.has(d.id)) continue;
+        seen.add(d.id); Fx.fireDef(d, 'onLifeLost');
+      }
+      W.lostDefs.length = 0;
+      // 灼热清空了最后一块砖 → 直接算通关，不再扣命
+      if (W.gcount === 0 && !W.boss) { Game.clearLevel(); return; }
+      if (W.rpd) W.rpd.hits = 0;                       // 随机挡板：掉命重新累计
+      W.lives--; W.combo = 0; W.deaths++; UI.hud();
+      // 掉命 → 激光连击中断。step() 在非 play 模式下会提前 return、钩子不会跑，故在这里直接清
+      if (W.lpd) { W.lpd.combo = 0; W.lpd.idle = 0; }
+      SFX.beep(160, .25, 'sawtooth', .07);
+      if (W.lives <= 0) {
+        W.mode = 'over';
+        UI.overlay('挑战失败',
+          `第 ${W.level} 关「${W.src.name}」未能通关<br>本局得分 <b style="color:#7dd3fc">${W.score}</b>　·　掉命 ${W.deaths} 次`,
+          '再试一次', 'retry', '返回选关');
+      } else {
+        W.ebullets.length = 0; W.lasers.length = 0; W.narrow = 0;
+        this.resetBall(); W.mode = 'ready';
+        UI.overlay('还剩 ' + W.lives + ' 条命', '按空格或点击按钮继续发射。', '继续', 'resume');
+      }
+      return;
+    }
+
+    // 过关
+    if (W.gcount === 0 && !W.boss) { Game.clearLevel(); return; }
+
+    // 道具
+    for (let i = W.drops.length - 1; i >= 0; i--) {
+      const d = W.drops[i];
+      d.y += d.vy * ts;
+      if (d.y > C.H) { W.drops.splice(i, 1); continue; }
+      if (d.y + d.h >= W.paddle.y && d.y <= W.paddle.y + C.PADDLE_H &&
+          d.x + d.w >= W.paddle.x && d.x <= W.paddle.x + W.paddle.w) {
+        Fx.applyPower(d.k); W.drops.splice(i, 1);
+      }
+    }
+
+    // 激光
+    if (W.eff.laser > 0) this.fireLaser();
+    for (let i = W.lasers.length - 1; i >= 0; i--) {
+      const L = W.lasers[i];
+      L.y += L.vy * ts;
+      if (L.y < -12) {
+        // 激光挡板：可选「空枪即断连击」（默认关闭）
+        if (L.lpd && !L.hit) {
+          const ab = (W.pd && (W.pd.abilities || []).find(a => a.t === 'laserPaddle'));
+          if (ab && ab.resetOnMiss && W.lpd) W.lpd.combo = 0;
+        }
+        W.lasers.splice(i, 1); continue;
+      }
+      let gone = false;
+      const cands = Level.candidates(L.x, L.y, 2);
+      for (const k of cands) {
+        if (L.x >= k.x && L.x <= k.x + C.BW && L.y >= k.y - 8 && L.y <= k.y + C.BH) {
+          const ld = L.dmg != null ? L.dmg : C.LASER_DMG;
+          Fx.damageBrick(k, ld, L.x, L.y);
+          Fx.pop(L.x, L.y - 4, '−' + ld, L.lpd ? '#67e8f9' : '#fbbf24');
+          gone = true; L.hit = true; break;
+        }
+      }
+      if (!gone && W.boss && L.x >= W.boss.x && L.x <= W.boss.x + W.boss.w &&
+          L.y >= W.boss.y - 8 && L.y <= W.boss.y + W.boss.h) {
+        // 先缓存坐标：damageBoss 击破后会把 W.boss 置 null，之后再访问会崩
+        const ld2 = L.dmg != null ? L.dmg : C.LASER_DMG;
+        const hy = W.boss.y + W.boss.h;
+        this.damageBoss(ld2, L.x, hy);
+        Fx.pop(L.x, hy - 4, '−' + ld2, L.lpd ? '#67e8f9' : '#fbbf24');
+        gone = true; L.hit = true;
+      }
+      if (gone) {
+        if (L.lpd) { const st = W.lpd; if (st) { st.combo++; st.idle = 0; } }   // 有效命中 → 续命
+        W.lasers.splice(i, 1);
+      }
+    }
+
+    // BOSS 行动
+    const B = W.boss;
+    if (B) {
+      const rage = B.hp <= B.max * 0.4;
+      B.x += B.vx * (rage ? 1.7 : 1) * ts;
+      if (B.x < C.MARGIN) { B.x = C.MARGIN; B.vx = Math.abs(B.vx); }
+      if (B.x + B.w > C.W - C.MARGIN) { B.x = C.W - C.MARGIN - B.w; B.vx = -Math.abs(B.vx); }
+      B.flash = Math.max(0, B.flash - 0.07 * ts);
+      B.cd -= sec;
+      if (B.cd <= 0) {
+        B.cd = Math.max(1.0, B.def.fireBase - W.level * B.def.firePerLevel) * (rage ? 0.65 : 1);
+        W.ebullets.push({x: B.x + B.w / 2, y: B.y + B.h + 4,
+                         vx: U.rnd(-0.9, 0.9), vy: 3.0 + W.level * 0.12, r: 6});
+        SFX.beep(210, .08, 'sawtooth', .035);
+      }
+    }
+
+    // BOSS 子弹
+    for (let i = W.ebullets.length - 1; i >= 0; i--) {
+      const e = W.ebullets[i];
+      e.x += e.vx * ts; e.y += e.vy * ts;
+      if (e.x < e.r) { e.x = e.r; e.vx = Math.abs(e.vx); }
+      if (e.x > C.W - e.r) { e.x = C.W - e.r; e.vx = -Math.abs(e.vx); }
+      if (e.y - e.r > C.H) { W.ebullets.splice(i, 1); continue; }
+      if (e.y + e.r >= W.paddle.y && e.y - e.r <= W.paddle.y + C.PADDLE_H &&
+          e.x >= W.paddle.x - e.r && e.x <= W.paddle.x + W.paddle.w + e.r) {
+        W.narrow = 4; W.combo = 0; W.shake = 11; UI.hud();
+        Fx.burst(e.x, W.paddle.y, '#ef4444', 16);
+        SFX.beep(130, .2, 'sawtooth', .07);
+        W.ebullets.splice(i, 1);
+      }
+    }
+  }
+};
+// 让能力模块能调用 Physics.damageBoss
+Fx.damageBoss = (d, x, y) => Physics.damageBoss(d, x, y);
+
+/* ══════════════════════════════════════════════════════════════
+   12. 渲染器
+   性能策略：
+     a) 砖块外观预渲染成离屏 sprite，绘制时只 drawImage
+     b) 小球光晕预渲染 sprite，运行时 0 次 shadowBlur
+     c) 背景星空预渲染到静态层，每帧一次 drawImage
+   ══════════════════════════════════════════════════════════════ */
+const Render = {
+  brickSprites: {}, ballSprites: {}, bgLayer: null, glowSprite: null,
+
+  make(w, h) {
+    const cv = document.createElement('canvas');
+    cv.width = w; cv.height = h;
+    return cv;
+  },
+
+  buildBrickSprite(def) {
+    if (this.brickSprites[def.id]) return this.brickSprites[def.id];
+    const pad = 2, w = Math.ceil(C.BW) + pad * 2, h = C.BH + pad * 2;
+    const cv = this.make(w, h), g = cv.getContext('2d');
+    g.fillStyle = def.color;
+    g.beginPath();
+    g.moveTo(pad + 5, pad);
+    g.arcTo(pad + C.BW, pad, pad + C.BW, pad + C.BH, 5);
+    g.arcTo(pad + C.BW, pad + C.BH, pad, pad + C.BH, 5);
+    g.arcTo(pad, pad + C.BH, pad, pad, 5);
+    g.arcTo(pad, pad, pad + C.BW, pad, 5);
+    g.closePath(); g.fill();
+    g.fillStyle = 'rgba(255,255,255,.28)';
+    g.fillRect(pad + 2, pad + 2, C.BW - 4, 6);
+    g.strokeStyle = 'rgba(0,0,0,.28)'; g.lineWidth = 1;
+    g.stroke();
+    this.brickSprites[def.id] = {cv, pad};
+    return this.brickSprites[def.id];
+  },
+
+  buildBallSprite(color, r) {
+    const key = color + '_' + r;
+    if (this.ballSprites[key]) return this.ballSprites[key];
+    const pad = 16, size = (r + pad) * 2;
+    const cv = this.make(size, size), g = cv.getContext('2d');
+    const c = size / 2;
+    g.shadowColor = color; g.shadowBlur = 14;
+    const grd = g.createRadialGradient(c - r * 0.25, c - r * 0.35, 1, c, c, r);
+    grd.addColorStop(0, '#ffffff'); grd.addColorStop(1, color);
+    g.fillStyle = grd;
+    g.beginPath(); g.arc(c, c, r, 0, 7); g.fill();
+    g.shadowBlur = 0;
+    this.ballSprites[key] = {cv, off: c};
+    return this.ballSprites[key];
+  },
+
+  buildBackground() {
+    const cv = this.make(C.W, C.H), g = cv.getContext('2d');
+    const grd = g.createLinearGradient(0, 0, 0, C.H);
+    grd.addColorStop(0, '#111a3d'); grd.addColorStop(1, '#070a18');
+    g.fillStyle = grd; g.fillRect(0, 0, C.W, C.H);
+    for (let i = 0; i < 60; i++) {
+      g.globalAlpha = U.rnd(0.15, 0.65);
+      g.fillStyle = '#93c5fd';
+      g.beginPath();
+      g.arc(U.rnd(0, C.W), U.rnd(0, C.H), U.rnd(0.3, 1.7), 0, 7);
+      g.fill();
+    }
+    g.globalAlpha = 1;
+    this.bgLayer = cv;
+  },
+
+  init() { this.buildBackground(); },
+
+  draw() {
+    ctx.save();
+    if (W.shake > 0) {
+      const s = W.shake;
+      ctx.translate(U.rnd(-s / 2, s / 2), U.rnd(-s / 2, s / 2));
+    }
+
+    // 背景（一次 drawImage）
+    ctx.drawImage(this.bgLayer, 0, 0);
+
+    // 砖块（drawImage，无路径运算）
+    for (let i = 0; i < W.grid.length; i++) {
+      const k = W.grid[i];
+      if (!k) continue;
+      const sp = this.buildBrickSprite(k.def);
+      ctx.drawImage(sp.cv, k.x - sp.pad, k.y - sp.pad);
+      // 灼热标记：跳动的橙色余烬边框 + 角标，一眼看出掉命时会被结算
+      if (k.burn) {
+        const a = 0.45 + Math.sin(W.t * 7 + k.gi) * 0.25;
+        ctx.globalAlpha = a;
+        ctx.strokeStyle = '#fb923c'; ctx.lineWidth = 2;
+        U.rr(k.x - 1, k.y - 1, C.BW + 2, C.BH + 2, 5); ctx.stroke();
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = '#fdba74';
+        ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText('灼热' + (k.burnDmg || ''), k.cx, k.y - 7);
+      }
+      // 血量数字（多血砖才画）
+      if (k.max > C.BASE_DMG) {
+        ctx.fillStyle = 'rgba(10,12,26,.8)';
+        ctx.font = 'bold 11px sans-serif';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(k.hp, k.cx, k.cy + 1);
+      }
+    }
+
+    // BOSS
+    if (W.boss) this.drawBoss(W.boss);
+
+    // 道具
+    for (const d of W.drops) {
+      ctx.fillStyle = d.def.color;
+      U.rr(d.x, d.y, d.w, d.h, 5); ctx.fill();
+      ctx.fillStyle = '#08101f';
+      ctx.font = 'bold 13px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(d.k, d.x + d.w / 2, d.y + d.h / 2 + 1);
+    }
+
+    // 激光弹
+    ctx.fillStyle = '#fde68a';
+    for (const L of W.lasers) {
+      const cyan = !!L.lpd;
+      const col = cyan ? '#67e8f9' : '#fbbf24';
+      // 外发光（低伤害也要看得见）
+      ctx.globalAlpha = .32;
+      ctx.fillStyle = col;
+      U.rr(L.x - 6, L.y - 16, 12, 24, 6); ctx.fill();
+      ctx.globalAlpha = 1;
+      // 弹体
+      ctx.fillStyle = col;
+      U.rr(L.x - 3, L.y - 13, 6, 18, 3); ctx.fill();
+      ctx.fillStyle = '#fff';
+      U.rr(L.x - 1.2, L.y - 11, 2.4, 13, 1.2); ctx.fill();
+    }
+
+    // BOSS 子弹
+    for (const e of W.ebullets) {
+      ctx.fillStyle = '#ef4444';
+      ctx.beginPath(); ctx.arc(e.x, e.y, e.r, 0, 7); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,.8)';
+      ctx.beginPath(); ctx.arc(e.x - 1.5, e.y - 2, e.r * 0.35, 0, 7); ctx.fill();
+    }
+
+    this.drawPaddle();
+    this.drawBalls();
+    this.drawPops();          // 伤害飘字（画在最上层）
+    this.drawParticles();
+    this.drawHints();
+
+    ctx.restore();
+    if (W.shake > 0) W.shake = Math.max(0, W.shake - 0.35);
+  },
+
+  /* 磁力落点预测：把小球在当前磁力下、忽略砖块碰撞地推演若干帧，
+     画出弯曲虚线 + 落点箭头。这是「看得出磁力」最直观的方式——
+     没有磁力时是一条直线，有磁力时会明显弯向挡板中心。 */
+  magPredict(b, ab) {
+    const m = Reg.ability('magnet');
+    const pd = W.paddle;
+    const dt = 1 / 60;
+    const fake = {
+      x: b.x, y: b.y, vx: b.vx, vy: b.vy,
+      stick: false, boost: b.boost || 0, heat: b.heat || 0,
+      spdMul: b.spdMul || 1, dmgMul: b.dmgMul || 1, def: b.def, r: b.r, mag: 0
+    };
+    const pts = [], N = 300;
+    let landX = null;
+    for (let i = 0; i < N; i++) {
+      if (m && ab) m.onBallUpdate(fake, dt, ab);
+      // 墙壁反弹（左右）
+      fake.x += fake.vx; fake.y += fake.vy;
+      if (fake.x < b.r) { fake.x = b.r; fake.vx = Math.abs(fake.vx); }
+      if (fake.x > C.W - b.r) { fake.x = C.W - b.r; fake.vx = -Math.abs(fake.vx); }
+      if (i % 3 === 0) pts.push([fake.x, fake.y]);
+      if (fake.y >= pd.y - b.r) { landX = fake.x; break; }
+      if (fake.y < C.TOP - 60) break;           // 飞出上方，放弃
+    }
+    return {pts, landX};
+  },
+
+  drawMagPredict(b, ab) {
+    const pd = W.paddle;
+    const r = this.magPredict(b, ab);
+    if (r.pts.length < 2) return;
+
+    // 弯曲虚线
+    ctx.save();
+    ctx.setLineDash([3, 6]);
+    ctx.strokeStyle = 'rgba(196,181,253,.5)';
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.moveTo(r.pts[0][0], r.pts[0][1]);
+    for (let i = 1; i < r.pts.length; i++) ctx.lineTo(r.pts[i][0], r.pts[i][1]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // 落点箭头 ▼
+    if (r.landX != null) {
+      const y = pd.y - 6;
+      const pulse = 0.6 + 0.4 * Math.sin(W.t * 6);
+      ctx.fillStyle = 'rgba(221,214,254,' + (0.55 + pulse * 0.4).toFixed(3) + ')';
+      ctx.beginPath();
+      ctx.moveTo(r.landX - 7, y - 10);
+      ctx.lineTo(r.landX + 7, y - 10);
+      ctx.lineTo(r.landX, y);
+      ctx.closePath();
+      ctx.fill();
+      // 落点到挡板中心的连线，越短说明吸得越准
+      const cx = pd.x + pd.w / 2;
+      ctx.strokeStyle = 'rgba(196,181,253,.35)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(r.landX, y - 12); ctx.lineTo(cx, y - 12);
+      ctx.stroke();
+    }
+    ctx.restore();
+  },
+
+  // 挡板是否带磁力能力
+  magAb() {
+    const ab = W.pd && (W.pd.abilities || []).find(a => a.t === 'magnet');
+    return ab || null;
+  },
+
+  // 全屏磁力场：顶端也有淡淡的底噪（对应 floor 保底强度），越往下越亮
+  drawMagnetField(pd, ab) {
+    const top = C.TOP;
+    const h = pd.y - top;
+    // 场域浓度跟随总强度倍率：磁力减半后，漏斗看起来也跟着变淡，手感与画面一致
+    const m = Reg.ability('magnet');
+    const s = m ? m.scaleOf(ab) : 1;
+    const grd = ctx.createLinearGradient(0, top, 0, pd.y);
+    grd.addColorStop(0,   'rgba(167,139,250,' + (0.10 * s).toFixed(3) + ')');  // 顶端保底
+    grd.addColorStop(.5,  'rgba(167,139,250,' + (0.15 * s).toFixed(3) + ')');
+    grd.addColorStop(1,   'rgba(167,139,250,' + (0.34 * s).toFixed(3) + ')');
+    // 场域宽度：以挡板为中心向两侧张开（顶端窄、底部宽，像个漏斗）
+    const half = (pd.w + 150) / 2;
+    const cx = pd.x + pd.w / 2;
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(cx - half * 0.55, top);
+    ctx.lineTo(cx + half * 0.55, top);
+    ctx.lineTo(cx + half, pd.y);
+    ctx.lineTo(cx - half, pd.y);
+    ctx.closePath();
+    ctx.fillStyle = grd;
+    ctx.fill();
+
+    // 两侧边线：透明度随强度变化，直观显示「顶端也有效、越靠近越强」
+    const SEG = 24;
+    for (let i = 0; i < SEG; i++) {
+      const t1 = i / SEG, t2 = (i + 1) / SEG;
+      const y1 = top + h * t1, y2 = top + h * t2;
+      const dyMid = pd.y - (y1 + y2) / 2;
+      const f = m ? m.falloff(dyMid, ab) : 1;
+      const w1 = half * (0.55 + 0.45 * t1), w2 = half * (0.55 + 0.45 * t2);
+      ctx.strokeStyle = 'rgba(167,139,250,' + (0.14 + f * 0.46).toFixed(3) + ')';
+      ctx.lineWidth = 1 + f * 1.6;
+      ctx.beginPath();
+      ctx.moveTo(cx - w1, y1); ctx.lineTo(cx - w2, y2);
+      ctx.moveTo(cx + w1, y1); ctx.lineTo(cx + w2, y2);
+      ctx.stroke();
+    }
+    ctx.restore();
+  },
+
+  // 挡板是否带激光能力
+  laserAb() {
+    const ab = W.pd && (W.pd.abilities || []).find(a => a.t === 'laserPaddle');
+    return ab || null;
+  },
+
+  // 激光炮口 + 连击进度环（画在挡板中心上方）
+  drawLaserMuzzle(pd, ab) {
+    const m = Reg.ability('laserPaddle');
+    const st = W.lpd;
+    const cx = pd.x + pd.w / 2;
+    const ready = st && st.cd <= 0;
+
+    // 炮口
+    ctx.fillStyle = ready ? 'rgba(103,232,249,.95)' : 'rgba(103,232,249,.45)';
+    U.rr(cx - 4, pd.y - 12, 8, 12, 2); ctx.fill();
+    if (ready) {
+      ctx.fillStyle = 'rgba(103,232,249,.30)';
+      ctx.beginPath(); ctx.arc(cx, pd.y - 12, 6 + Math.sin(W.t * 8) * 1.5, 0, 6.2832); ctx.fill();
+    }
+
+    // 连击进度：环 + 伤害档位
+    if (st && m) {
+      const per = m.perOf(ab);
+      const tier = m.tierOf(st, ab);
+      const prog = tier >= C.DMG_MAX ? 1 : (st.combo % per) / per;
+      const R0 = 13;
+      ctx.strokeStyle = 'rgba(15,23,42,.55)'; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(cx, pd.y + 6, R0, 0, 6.2832); ctx.stroke();
+      ctx.strokeStyle = tier >= 3 ? '#f87171' : tier >= 2 ? '#fbbf24' : '#67e8f9';
+      ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(cx, pd.y + 6, R0, -Math.PI / 2, -Math.PI / 2 + prog * 6.2832); ctx.stroke();
+      if (st.combo > 0) {
+        ctx.fillStyle = '#e2e8ff'; ctx.font = 'bold 9px sans-serif'; ctx.textAlign = 'center';
+        ctx.fillText(`×${tier} ${st.combo}`, cx, pd.y + 9.5);
+        ctx.textAlign = 'left';
+      }
+    }
+  },
+
+  drawPops() {
+    ctx.textAlign = 'center';
+    for (let i = 0; i < C.POP_MAX; i++) {
+      const p = W.pops[i];
+      if (p.life <= 0) continue;
+      const a = Math.min(1, p.life);
+      ctx.globalAlpha = a;
+      ctx.fillStyle = p.color;
+      ctx.font = 'bold 15px sans-serif';
+      // 描黑边保证在深色背景上也清晰
+      ctx.strokeStyle = 'rgba(2,4,12,.85)'; ctx.lineWidth = 3;
+      ctx.strokeText(p.text, p.x, p.y);
+      ctx.fillText(p.text, p.x, p.y);
+      ctx.globalAlpha = 1;
+    }
+    ctx.textAlign = 'left';
+  },
+
+  drawPaddle() {
+    const pd = W.paddle, isBouncy = (W.pd && (W.pd.abilities || []).some(a => a.t === 'pulse'));
+    const magAb = this.magAb();
+    if (magAb) this.drawMagnetField(pd, magAb);
+    const pulsing = isBouncy && W.pulseT > 0;
+    let g1, g2;
+    if (pulsing) { g1 = '#ffffff'; g2 = '#a3e635'; }
+    else if (W.narrow > 0) { g1 = '#fca5a5'; g2 = '#ef4444'; }
+    else { g1 = '#e2e8ff'; g2 = '#7dd3fc'; }
+    const grd = ctx.createLinearGradient(pd.x, pd.y, pd.x, pd.y + C.PADDLE_H);
+    grd.addColorStop(0, g1); grd.addColorStop(1, g2);
+    ctx.fillStyle = grd;
+    const h = pulsing ? C.PADDLE_H + 5 : C.PADDLE_H;
+    const y = pulsing ? pd.y - 5 : pd.y;
+    U.rr(pd.x, y, pd.w, h, h / 2); ctx.fill();
+
+    const laserAb = this.laserAb();
+    if (laserAb) this.drawLaserMuzzle(pd, laserAb);
+
+    if (magAb) {
+      ctx.strokeStyle = 'rgba(196,181,253,.85)';
+      ctx.lineWidth = 2;
+      U.rr(pd.x - 1, y - 1, pd.w + 2, h + 2, (h + 2) / 2); ctx.stroke();
+    }
+
+    if (isBouncy && !pulsing) {
+      ctx.fillStyle = 'rgba(163,230,53,.55)';
+      for (const off of [pd.w * 0.3, pd.w * 0.7]) {
+        ctx.beginPath();
+        ctx.moveTo(pd.x + off, pd.y - 3);
+        ctx.lineTo(pd.x + off - 4, pd.y + 3);
+        ctx.lineTo(pd.x + off + 4, pd.y + 3);
+        ctx.closePath(); ctx.fill();
+      }
+    }
+    if (W.eff.laser > 0) {
+      ctx.fillStyle = '#fbbf24';
+      for (const off of [10, pd.w - 10]) { U.rr(pd.x + off - 4, pd.y - 11, 8, 13, 3); ctx.fill(); }
+    }
+  },
+
+  drawBalls() {
+    const colors = ['#a78bfa', '#facc15', '#f87171'];
+    for (const b of W.balls) {
+      const tier = Fx.tier(b);
+      const col = colors[U.clamp(tier - 1, 0, 2)];
+      // 拖尾
+      const n = b.trail.length / 2;
+      for (let i = 0; i < n; i++) {
+        const a = (i + 1) / n;
+        ctx.globalAlpha = a * (0.25 + tier * 0.12);
+        ctx.fillStyle = col;
+        ctx.beginPath();
+        ctx.arc(b.trail[i * 2], b.trail[i * 2 + 1], b.r * a * 0.9, 0, 7);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+      // 球体（预渲染 sprite）
+      const sp = this.buildBallSprite(col, b.r);
+      ctx.drawImage(sp.cv, b.x - sp.off, b.y - sp.off);
+      // 蓄力环
+      const fr = Fx.heatFrac(b);
+      if (tier < C.DMG_MAX || fr > 0) {
+        ctx.strokeStyle = 'rgba(255,255,255,.22)'; ctx.lineWidth = 2.5;
+        ctx.beginPath(); ctx.arc(b.x, b.y, b.r + 5, 0, 7); ctx.stroke();
+        ctx.strokeStyle = col;
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, b.r + 5, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * fr);
+        ctx.stroke();
+      }
+      // 磁力牵引线：球被拉向挡板中心（线越粗越亮 = 吸力越强）
+      const magAb = this.magAb();
+      if (magAb && !b.stick) this.drawMagPredict(b, magAb);
+      if (b.mag > 0 && magAb) {
+        const cx = W.paddle.x + W.paddle.w / 2, cy = W.paddle.y;
+        const a = 0.25 + b.mag * 0.6;
+        ctx.strokeStyle = 'rgba(196,181,253,' + a.toFixed(3) + ')';
+        ctx.lineWidth = 1 + b.mag * 3.2;
+        ctx.setLineDash([5, 4]);
+        ctx.beginPath();
+        ctx.moveTo(b.x, b.y); ctx.lineTo(cx, cy);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        // 沿牵引线流动的粒子：直观显示「吸力方向」
+        const dx = cx - b.x, dy = cy - b.y;
+        const len = Math.hypot(dx, dy) || 1;
+        const cnt = Math.min(6, Math.floor(len / 46));
+        for (let k = 0; k < cnt; k++) {
+          const ph = ((W.t * 0.9 + k / cnt) % 1);       // 0→1 从球流向挡板
+          const px = b.x + dx * ph, py = b.y + dy * ph;
+          ctx.fillStyle = 'rgba(221,214,254,' + (a * (1 - Math.abs(ph - .5) * 1.2)).toFixed(3) + ')';
+          ctx.beginPath(); ctx.arc(px, py, 1.6 + b.mag * 1.4, 0, 6.2832); ctx.fill();
+        }
+        // 球身上的磁力光环
+        ctx.strokeStyle = 'rgba(196,181,253,' + (a * .8).toFixed(3) + ')';
+        ctx.lineWidth = 1.2;
+        ctx.beginPath(); ctx.arc(b.x, b.y, b.r + 4 + b.mag * 3, 0, 6.2832); ctx.stroke();
+      }
+
+      if (tier > 1) {
+        ctx.fillStyle = col; ctx.font = 'bold 11px sans-serif';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText('×' + tier, b.x, b.y - b.r - 12);
+      }
+      // 灼热球：本体的橙色火环，和「被点着的砖块」呼应
+      if ((b.def && b.def.abilities || []).some(a => a.t === 'burn')) {
+        ctx.strokeStyle = 'rgba(251,146,60,' + (0.55 + Math.sin(W.t * 9) * 0.3).toFixed(3) + ')';
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(b.x, b.y, b.r + 2.5, 0, 6.2832); ctx.stroke();
+      }
+      // 穿透中：白色虚线环 + 拖尾，和「会反弹」的状态明确区分
+      if (b.pierce) {
+        ctx.setLineDash([4, 4]);
+        ctx.strokeStyle = 'rgba(226,232,255,' + (0.55 + Math.sin(W.t * 10) * 0.28).toFixed(3) + ')';
+        ctx.lineWidth = 1.8;
+        ctx.beginPath(); ctx.arc(b.x, b.y, b.r + 6, 0, 6.2832); ctx.stroke();
+        ctx.setLineDash([]);
+      }
+    }
+  },
+
+  drawParticles() {
+    for (let i = 0; i < C.PART_MAX; i++) {
+      const p = W.parts[i];
+      if (p.life <= 0) continue;
+      ctx.globalAlpha = Math.min(1, p.life);
+      ctx.fillStyle = p.color;
+      ctx.fillRect(p.x - p.size / 2, p.y - p.size / 2, p.size, p.size);
+    }
+    ctx.globalAlpha = 1;
+  },
+
+  drawBoss(B) {
+    const rage = B.hp <= B.max * 0.4;
+    const grd = ctx.createLinearGradient(B.x, B.y, B.x, B.y + B.h);
+    if (rage) { grd.addColorStop(0, '#fca5a5'); grd.addColorStop(1, '#7f1d1d'); }
+    else { grd.addColorStop(0, '#fcd34d'); grd.addColorStop(1, '#b45309'); }
+    ctx.fillStyle = grd;
+    U.rr(B.x, B.y, B.w, B.h, 10); ctx.fill();
+    if (B.flash > 0) {
+      ctx.globalAlpha = B.flash * 0.85; ctx.fillStyle = '#fff';
+      U.rr(B.x, B.y, B.w, B.h, 10); ctx.fill(); ctx.globalAlpha = 1;
+    }
+    ctx.strokeStyle = 'rgba(0,0,0,.4)'; ctx.lineWidth = 2;
+    U.rr(B.x + 1, B.y + 1, B.w - 2, B.h - 2, 10); ctx.stroke();
+    // 灼热标记
+    if (B.burn) {
+      ctx.globalAlpha = 0.5 + Math.sin(W.t * 7) * 0.28;
+      ctx.strokeStyle = '#fb923c'; ctx.lineWidth = 2.5;
+      U.rr(B.x - 2, B.y - 2, B.w + 4, B.h + 4, 12); ctx.stroke();
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = '#fdba74';
+      ctx.font = 'bold 11px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('灼热 ' + (B.burnDmg || ''), B.x + B.w / 2, B.y - 24);
+    }
+    for (const ox of [B.w * 0.32, B.w * 0.68]) {
+      ctx.fillStyle = '#fff8e1';
+      ctx.beginPath(); ctx.ellipse(B.x + ox, B.y + B.h * 0.45, 13, 10, 0, 0, 7); ctx.fill();
+      ctx.fillStyle = rage ? '#dc2626' : '#7c2d12';
+      ctx.beginPath(); ctx.arc(B.x + ox, B.y + B.h * 0.45, 5, 0, 7); ctx.fill();
+    }
+    const barW = B.w + 20, bx = B.x - 10, by = B.y - 17;
+    ctx.fillStyle = 'rgba(0,0,0,.5)'; U.rr(bx, by, barW, 9, 4); ctx.fill();
+    ctx.fillStyle = rage ? '#ef4444' : '#f59e0b';
+    U.rr(bx, by, barW * Math.max(0, B.hp / B.max), 9, 4); ctx.fill();
+  },
+
+  drawHints() {
+    // buff 提示
+    const buffs = [];
+    if (W.eff.laser > 0)  buffs.push(['激光炮台', W.eff.laser, '#fbbf24']);
+    if (W.eff.expand > 0) buffs.push(['挡板加宽', W.eff.expand, '#22d3ee']);
+    if (W.eff.slow > 0)   buffs.push(['小球减速', W.eff.slow, '#a3e635']);
+    if (W.narrow > 0)     buffs.push(['挡板变窄', W.narrow, '#f87171']);
+    ctx.font = 'bold 13px sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    buffs.forEach((bf, i) => {
+      ctx.fillStyle = bf[2];
+      ctx.fillText(`${bf[0]} ${bf[1].toFixed(1)}s`, 14, C.H - 18 - i * 20);
+    });
+
+    // 弹射状态条
+    if (W.pd && (W.pd.abilities || []).some(a => a.t === 'pulse')) {
+      const bx = C.W - 132, by = C.H - 30, bw = 118, bh = 8;
+      ctx.fillStyle = 'rgba(0,0,0,.45)'; U.rr(bx, by, bw, bh, 4); ctx.fill();
+      const cdLeft = W.pulseT > 0 ? null : (W.pulseCd > 0 ? W.pulseCd : null);
+      if (W.pulseT > 0) {
+        ctx.fillStyle = '#a3e635';
+        U.rr(bx, by, bw * (W.pulseT / C.PULSE_TIME), bh, 4); ctx.fill();
+      } else if (cdLeft !== null) {
+        ctx.fillStyle = 'rgba(163,230,53,.35)';
+        U.rr(bx, by, bw * (1 - cdLeft / C.PULSE_CD), bh, 4); ctx.fill();
+      } else {
+        ctx.fillStyle = '#a3e635'; U.rr(bx, by, bw, bh, 4); ctx.fill();
+      }
+      ctx.fillStyle = W.pulseT > 0 ? '#a3e635' : (cdLeft !== null ? '#6b7a99' : '#a3e635');
+      ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+      ctx.fillText(W.pulseT > 0 ? '弹性增强中'
+                 : (cdLeft !== null ? '冷却 ' + cdLeft.toFixed(1) + 's' : '左键 / J 可弹射'),
+                   C.W - 14, by - 10);
+    }
+
+    // 磁力挡板：有球在飞时提示虚线是落点预测（视觉本身已画在球前方）
+    if ((W.mode === 'play' || W.mode === 'ready') && this.magAb() && W.balls.some(b => !b.stick)) {
+      ctx.fillStyle = '#c4b5fd';
+      ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+      ctx.fillText('磁力 · 虚线为落点预测', 14, C.H - 88);
+    }
+
+    // 灼热计数：显示总伤害（叠加后的合计），让「越烧越疼」看得见
+    if (W.mode === 'play' || W.mode === 'ready') {
+      let bn = 0, sum = 0, mx = 0;
+      for (const k of W.grid) if (k && k.burn) { bn++; sum += (k.burnDmg || 0); mx = Math.max(mx, k.burnDmg || 0); }
+      const bBoss = !!(W.boss && W.boss.burn);
+      if (bBoss) { sum += (W.boss.burnDmg || 0); mx = Math.max(mx, W.boss.burnDmg || 0); }
+      if (bn || bBoss) {
+        ctx.fillStyle = '#fb923c';
+        ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+        ctx.fillText(`灼热 ${bn + (bBoss ? 1 : 0)} 个　合计 −${sum}${mx > 40 ? '　最高 −' + mx : ''}`, 14, C.H - 70);
+      }
+    }
+
+    // 穿透状态：挡板版（发球一次、撞墙失效）与小球版（永久）分开显示
+    if (W.mode === 'play' || W.mode === 'ready') {
+      const pdPierce  = !!(W.pd && (W.pd.abilities || []).some(a => a.t === 'pierce'));
+      const ballPierce = W.balls.some(b => b.def && (b.def.abilities || []).some(a => a.t === 'pierceBall'));
+      const on = W.balls.some(b => b.pierce);
+      let txt = null;
+      if (ballPierce)      txt = '穿透球 · 永久穿透';
+      else if (pdPierce)   txt = on ? '穿透生效中 · 撞墙失效'
+                                    : (W.balls.some(b => b.stick) ? '穿透 · 发球后生效' : '穿透已失效 · 下颗球恢复');
+      if (txt) {
+        ctx.fillStyle = on ? '#e2e8ff' : '#6b7a99';
+        ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+        ctx.fillText(txt, 14, C.H - 52);
+      }
+    }
+
+    // 叠伤球：当前基础伤害加成 + 距下一级还差几次接板
+    if ((W.mode === 'play' || W.mode === 'ready') && W.balls.length) {
+      const m = Reg.ability('stackBall');
+      let best = null;
+      for (const b of W.balls) {
+        const ab = (b.def && b.def.abilities || []).find(a => a.t === 'stackBall');
+        if (!ab || !m) continue;
+        const add = b.dmgAdd || 0, left = m.perOf(ab) - ((b.stackHits || 0) % m.perOf(ab));
+        if (!best || add > best.add) best = {add, left, per: m.perOf(ab), unit: m.addOf(ab)};
+      }
+      if (best) {
+        ctx.fillStyle = best.add > 0 ? '#f472b6' : '#9ca3af';
+        ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+        ctx.fillText(best.add > 0 ? `增强 基础伤害 +${best.add}　再接 ${best.left} 次 +${best.unit}`
+                                  : `增强 +0　再接 ${best.left} 次 +${best.unit}`, C.W - 14, C.H - 52);
+      }
+    }
+
+    // 随机挡板：距「召唤随机小球」还差几次接板
+    if ((W.mode === 'play' || W.mode === 'ready') &&
+        W.pd && (W.pd.abilities || []).some(a => a.t === 'randomPaddle')) {
+      const m = Reg.ability('randomPaddle');
+      const ab = (W.pd.abilities || []).find(a => a.t === 'randomPaddle');
+      const per = m ? m.perOf(ab) : 5, hits = (W.rpd && W.rpd.hits) || 0;
+      const left = Math.max(0, per - hits);
+      ctx.fillStyle = left <= 1 ? '#c084fc' : '#6b7a99';
+      ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+      ctx.fillText(`随机球 · 再接 ${left} 次召唤 ${m ? m.countOf(ab) : 2} 个`, C.W - 14, C.H - 70);
+    }
+
+    // 激光挡板状态条：冷却进度 + 当前伤害 + 连击，避免「看不出有没有在工作」
+    const laserAb = this.laserAb();
+    if (laserAb && W.mode === 'play') {
+      const m = Reg.ability('laserPaddle');
+      const st = W.lpd || {cd: 0, combo: 0};
+      const away = W.balls.length > 0 && !W.balls.some(b => b.stick);
+      const bx = 14, by = C.H - 30, bw = 168, bh = 7;
+      ctx.fillStyle = 'rgba(0,0,0,.45)'; U.rr(bx, by, bw, bh, 4); ctx.fill();
+      const rate = laserAb.rate != null ? laserAb.rate : 0.22;
+      if (!away) {
+        ctx.fillStyle = 'rgba(103,232,249,.28)'; U.rr(bx, by, bw, bh, 4); ctx.fill();
+      } else if (st.cd > 0) {
+        ctx.fillStyle = 'rgba(103,232,249,.45)';
+        U.rr(bx, by, bw * (1 - st.cd / rate), bh, 4); ctx.fill();
+      } else {
+        ctx.fillStyle = '#67e8f9'; U.rr(bx, by, bw, bh, 4); ctx.fill();
+      }
+      const tier = m ? m.tierOf(st, laserAb) : 1;
+      const dmg = m ? m.dmgOf(st, laserAb) : 0;
+      let txt = !away ? '激光 · 待发射'
+        : `激光 ${dmg} 伤害　连击 ${st.combo}${tier > 1 ? ' ×' + tier : ''}`;
+      // 连击保活倒计时：剩余不足 0.6 秒闪红，提醒赶紧补一发命中
+      const idleMax = m ? m.idleOf(laserAb) : 0;
+      let urgent = false;
+      if (away && idleMax > 0 && st.combo > 0) {
+        const left = Math.max(0, idleMax - (st.idle || 0));
+        txt += `　${left.toFixed(1)}s`;
+        urgent = left < 0.6;
+      }
+      ctx.fillStyle = urgent ? (Math.sin(W.t * 18) > 0 ? '#f87171' : '#fbbf24')
+                    : tier >= 3 ? '#f87171' : tier >= 2 ? '#fbbf24' : '#67e8f9';
+      ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+      ctx.fillText(txt, bx, by - 10);
+    }
+
+    // 自检：装备的能力若找不到对应模块，直接把原因写在屏幕上，避免「装了却没效果」查不出
+    const missing = [];
+    for (const src of [W.pd, W.bd]) {
+      for (const ab of ((src && src.abilities) || [])) {
+        if (!Reg.ability(ab.t)) missing.push(ab.t);
+      }
+    }
+    for (const b of W.balls) {
+      for (const ab of ((b.def && b.def.abilities) || [])) {
+        if (!Reg.ability(ab.t)) missing.push(ab.t);
+      }
+    }
+    if (missing.length) {
+      ctx.fillStyle = 'rgba(248,113,113,.95)';
+      ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+      ctx.fillText('⚠ 能力未注册：' + [...new Set(missing)].join(', ') +
+        '　（需重新导入含该模块的 JSON）', 14, 14);
+    }
+
+    // 待发射提示
+    if (W.balls.some(b => b.stick)) {
+      ctx.fillStyle = 'rgba(232,236,248,.6)';
+      ctx.textAlign = 'center'; ctx.font = '14px sans-serif';
+      ctx.fillText('按空格 / 点击发射', C.W / 2, W.paddle.y - 46);
+    }
+  }
+};
+
+/* ══════════════════════════════════════════════════════════════
+   13. UI
+   ══════════════════════════════════════════════════════════════ */
+const el = id => document.getElementById(id);
+const UI = {
+  hud() {
+    // 先刷新最高分，再显示——否则本帧刚破纪录时显示的是旧值，要下一帧才更新
+    if (W.score > W.best) { W.best = W.score; localStorage.setItem('bb_best', W.best); }
+    el('best').textContent = String(W.best);
+    el('level').textContent = W.src && W.src.__custom ? '自制' : String(W.level);
+
+    // 伤害 / 球速：优先取场上小球的实际值；没有球时按「当前装备」推算，
+    // 这样在选关页换装备也能立刻看到数值变化。
+    // 注意：不能用 C.BASE_DMG / 1.0 当初始值，否则倍率 <1 的小球会被兜底值盖住（如重球 0.85 速显示成 1.0×）
+    const ratio = b => Fx.ballSpeed(b) / (Fx.baseSpeed() || 1);
+    let dmg = null, smul = null;
+    for (const b of W.balls) {
+      const d = Fx.damage(b), s = ratio(b);
+      dmg = dmg === null ? d : Math.max(dmg, d);
+      smul = smul === null ? s : Math.max(smul, s);
+    }
+    if (dmg === null) {
+      const bd = W.bd || Reg.ball(Store.equipOf('ball'));
+      const probe = {heat: 0, boost: 0, dmgMul: 1, spdMul: 1, def: bd};
+      for (const ab of (bd.abilities || [])) {
+        const m = Reg.ability(ab.t);
+        if (m && m.onBallSpawn) m.onBallSpawn(probe, ab);
+      }
+      dmg = Fx.damage(probe);
+      smul = ratio(probe);
+    }
+    el('power').textContent = String(Math.round(dmg));
+    // 两位小数：0.85× 不会被截成 0.8×
+    el('spd').textContent = smul.toFixed(2) + '×';
+    const u = el('hudStar'); if (u) u.textContent = Store.usable();
+  },
+
+  // 换装备后刷新（HUD + 已装备标记）
+  afterEquip() {
+    this.renderTalents();
+    this.hud();
+  },
+
+  overlay(title, html, btn, action, btn2) {
+    el('ovTitle').textContent = title;
+    el('ovText').innerHTML = html;
+    el('ovBtn').textContent = btn;
+    const b2 = el('ovBtn2');
+    if (btn2) { b2.textContent = btn2; b2.style.display = ''; }
+    else b2.style.display = 'none';
+    el('overlay').classList.remove('hide');
+    this._action = action || 'start';
+  },
+  hideOverlay() { el('overlay').classList.add('hide'); },
+
+  /* ── 选关面板 ── */
+  openSelect() {
+    W.mode = 'select';
+    this.renderLevels();
+    this.renderTalents();
+    this.renderBricks();
+    this.refreshStars();
+    this.hud();
+    el('selectUI').classList.remove('hide');
+    this.hideOverlay();
+  },
+  closeSelect() { el('selectUI').classList.add('hide'); },
+
+  renderLevels() {
+    const grid = el('lvGrid');
+    grid.innerHTML = '';
+    for (let i = 1; i <= LV_COUNT; i++) {
+      const conf = LEVELS[i - 1];
+      const locked = i > Store.data.unlocked;
+      const st = Store.data.stars[i] || 0;
+      const b = document.createElement('button');
+      b.className = 'lv' + (locked ? ' lock' : '') + (conf.boss ? ' boss' : '') +
+                    (st > 0 ? ' done' : '') + (i === Store.data.unlocked && !locked ? ' now' : '');
+      b.innerHTML = `<span class="num">${i}</span><span class="nm">${locked ? '未解锁' : conf.name}</span>` +
+                    `<span class="st">${locked ? '' : '★'.repeat(st) + '☆'.repeat(3 - st)}</span>`;
+      if (!locked) b.addEventListener('click', () => {
+        this.closeSelect(); Game.start(i); SFX.resume();
+      });
+      grid.appendChild(b);
+    }
+    // 自定义关卡
+    const cust = Store.data.custom.levels;
+    const cg = el('custGrid'), cs = el('custSect');
+    cg.innerHTML = '';
+    if (cust.length) { cs.style.display = ''; cg.style.display = ''; }
+    else { cs.style.display = 'none'; cg.style.display = 'none'; }
+    cust.forEach((lv, idx) => {
+      const b = document.createElement('button');
+      b.className = 'lv cust';
+      b.innerHTML = `<span class="num">✎</span><span class="nm">${lv.name || '自制'}</span><span class="st"></span>`;
+      b.addEventListener('click', () => { this.closeSelect(); Game.startCustom(idx); SFX.resume(); });
+      b.addEventListener('contextmenu', e => { e.preventDefault(); Editor.load(idx); this.switchTab('edit'); });
+      cg.appendChild(b);
+    });
+  },
+
+  /* ── 天赋（挡板 / 小球）面板 ──
+     三态：已装备 / 已解锁（点击装备）/ 未解锁（显示价格，点击花星解锁并装备）
+     价格来自 Store.costOf（TALENT_COST 表 + 条目自带 cost） */
+  renderTalents(flashId) {
+    const priceNote = '点击解锁并装备　·　<b style="color:#4ade80">' + talentPriceNote() + '</b>';
+    const ps = el('paddleSub'), bs = el('ballSub');
+    if (ps) ps.innerHTML = priceNote;
+    if (bs) bs.innerHTML = priceNote;
+    for (const slot of ['paddle', 'ball']) {
+      const box = el(slot === 'paddle' ? 'talPaddle' : 'talBall');
+      box.innerHTML = '';
+      for (const t of Reg.list(slot)) {
+        const owned = Store.owns(slot, t.id);
+        const on = Store.equipOf(slot) === t.id;
+        const cost = Store.costOf(slot, t);
+        const usable = Store.usable();
+        const afford = cost <= usable;
+        const c = document.createElement('button');
+        c.className = 'talcard' + (on ? ' on' : '') +
+                      (!owned && cost > 0 ? ' locked' : '') + (flashId === t.id ? ' flash' : '');
+        let badge = on ? '<span class="badge eq">已装备</span>'
+                  : owned ? '<span class="badge free">点击装备</span>'
+                  : cost > 0 ? (afford ? `<span class="badge free">解锁 ${cost} ★</span>`
+                                       : `<span class="badge cost">需 ${cost} ★ · 还差 ${cost - usable}</span>`)
+                  : '<span class="badge lock">未解锁 · 免费</span>';
+        const abTxt = (t.abilities && t.abilities.length)
+          ? `<span class="badge free">能力：${t.abilities.map(a => ABILITY_NAME[a.t] || a.t).join(' / ')}</span>` : '';
+        const price = (!owned && cost > 0)
+          ? `<span class="ds" style="color:#facc15">解锁价 ${cost} ★　·　当前可用 ${usable} ★</span>` : '';
+        c.innerHTML = `<span class="ico">${t.icon || '●'}</span><span class="body">` +
+          `<span class="tt">${t.name}${badge}${abTxt}</span>` +
+          `<span class="ds">${t.note || ''}</span>${price}</span>`;
+        c.addEventListener('click', () => this.onTalentClick(slot, t));
+        box.appendChild(c);
+      }
+    }
+  },
+
+  /* 点击天赋卡：已拥有 → 直接装备；未拥有 → 校验星星 → 确认 → 按价格解锁并装备 */
+  onTalentClick(slot, t) {
+    if (Store.owns(slot, t.id)) { this.equipTalent(slot, t, false); return; }
+    const cost = Store.costOf(slot, t);
+    const usable = Store.usable();
+    if (cost > usable) {
+      UI.toast(`星星不够：「${t.name}」需要 ${cost} ★，还差 ${cost - usable} ★（通关不掉命可拿 3 ★）`, 'warn');
+      return;
+    }
+    const price = cost > 0
+      ? `花费 <b style="color:#facc15">${cost} ★</b> 解锁`
+      : '<b style="color:#4ade80">免费</b> 解锁';
+    const rest = cost > 0
+      ? `解锁后可用 <b style="color:#4ade80">${usable - cost} ★</b>`
+      : '当前为测试模式：全部装备 0 ★';
+    UI.confirm(`${price}「${t.name}」并装备？<br>${rest}`, () => {
+      if (!Store.pick(slot, t)) { UI.toast('解锁失败，星星不足', 'warn'); return; }
+      this.equipTalent(slot, t, true, cost);
+    });
+  },
+
+  // 装备生效（unlocked=本次是否刚解锁，用于提示文案与闪光）
+  equipTalent(slot, t, unlocked, cost) {
+    // 换装备立刻同步「伤害 / 球速」（尤其是小球，倍率会变）
+    if (slot === 'ball') { Physics.ballDef(); Game.applyEquipToBalls(); }
+    else {
+      W.pd = Reg.paddle(Store.equipOf('paddle'));   // 换挡板立刻生效，不必重开关卡
+      W.lpd = null; W.rpd = null;                   // 不继承上一件挡板的激光连击 / 召唤计数
+    }
+    this.renderTalents(unlocked ? t.id : null);
+    this.refreshStars();
+    this.hud();
+    if (unlocked) UI.toast(cost > 0
+      ? `已解锁「${t.name}」-${cost} ★，剩余可用 ${Store.usable()} ★`
+      : `已免费解锁并装备「${t.name}」（测试模式 0 ★）`, 'ok');
+  },
+
+  renderBricks() {
+    const box = el('talBrick');
+    box.innerHTML = '';
+    for (const b of Reg.list('brick')) {
+      const c = document.createElement('div');
+      c.className = 'talcard';
+      c.style.cursor = 'default';
+      const sw = `<span class="ico" style="background:${b.color};border-color:rgba(255,255,255,.3)">${b.ch || ''}</span>`;
+      c.innerHTML = sw + `<span class="body"><span class="tt">${b.name}` +
+        `<span class="badge lock">${b.hp} 血 · ${b.score} 分</span></span>` +
+        `<span class="ds">${b.note || ''}</span></span>`;
+      box.appendChild(c);
+    }
+  },
+
+  refreshStars() {
+    const a = el('starTotal'), b = el('starUsable'), c = el('starSpent'), u = el('hudStar');
+    if (a) a.textContent = Store.stars();
+    if (b) b.textContent = Store.usable();
+    if (c) c.textContent = Store.spent();
+    if (u) u.textContent = Store.usable();
+    // 余额为 0 时把「可用」标红，提示去通关攒星
+    const wrap = b && b.parentElement;
+    if (wrap) wrap.classList.toggle('low', Store.usable() <= 0);
+  },
+
+  /* ── 页内提示条（替代 alert）── */
+  _tt: 0,
+  toast(msg, kind) {
+    const t = el('toast');
+    t.textContent = msg;
+    t.className = kind || '';
+    t.classList.remove('hide');
+    clearTimeout(this._tt);
+    this._tt = setTimeout(() => t.classList.add('hide'), 2600);
+  },
+
+  /* ── 页内确认框（替代 confirm）──
+     原生 confirm 被浏览器屏蔽后会直接返回 false，导致删除静默失效，故不用它 */
+  _yes: null,
+  confirm(msg, onYes) {
+    this._yes = onYes;
+    // 用 innerHTML：解锁确认里需要把星星数加粗/换行（文案均为内部生成）
+    el('moTitle').innerHTML = msg;
+    el('modal').classList.remove('hide');
+  },
+  closeConfirm() { el('modal').classList.add('hide'); this._yes = null; },
+
+  /* 把当前自制内容写进 HTML 源码的固化区，并下载成新文件。
+     做法：取当前文档的完整源码（script 里保留的是原始代码），
+     把 BAKED_START 与 BAKED_END 两个标记之间的那一行换成新的 JSON。 */
+  bakeToFile() {
+    try {
+      const c = Store.data.custom;
+      const payload = {
+        bricks: c.bricks || [], balls: c.balls || [],
+        paddles: c.paddles || [], levels: c.levels || []
+      };
+      // JSON 里若出现 HTML 的脚本结束标签会截断文件，这里先转义掉
+      const json = JSON.stringify(payload).replace(/<\//g, '<\\/');
+      const src = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
+      const re = /(\/\*BAKED_START\*\/)[\s\S]*?(\/\*BAKED_END\*\/)/;
+      if (!re.test(src)) { UI.toast('文件里没找到固化区标记，请用「导出备份 JSON」手工粘贴', 'warn'); return; }
+      const out = src.replace(re, '$1\nwindow.BAKED_CUSTOM = ' + json + ';\n$2');
+      const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+      const name = `弹力球打砖块_含自制内容_${stamp}.html`;
+      const blob = new Blob([out], {type: 'text/html;charset=utf-8'});
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = name;
+      document.body.appendChild(a); a.click();
+      setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 4000);
+      UI.toast(`已下载「${name}」，打开即自带 ${Store.customCount()} 项自制内容`, 'ok');
+    } catch (err) {
+      UI.toast('固化失败：' + err.message + '　可改用「导出备份 JSON」', 'warn');
+    }
+  },
+
+  /* ── 回收站面板 ── */
+  openBin() {
+    this.renderBin();
+    el('binUI').classList.remove('hide');
+  },
+  closeBin() { el('binUI').classList.add('hide'); },
+
+  fmtTime(ms) {
+    if (!ms) return '时间未知';
+    const d = new Date(ms), p = n => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+  },
+  fmtCount(c) {
+    const n = countCustom(c);
+    if (!n) return '0 项';
+    const parts = [];
+    if (c.bricks.length) parts.push(`砖块 ${c.bricks.length}`);
+    if (c.balls.length) parts.push(`小球 ${c.balls.length}`);
+    if (c.paddles.length) parts.push(`挡板 ${c.paddles.length}`);
+    if (c.levels.length) parts.push(`关卡 ${c.levels.length}`);
+    return `共 ${n} 项：` + parts.join(' / ');
+  },
+  namesOf(c) {
+    const all = [].concat(c.balls || [], c.paddles || [], c.bricks || [], c.levels || []);
+    const s = all.map(o => o.name || o.id).filter(Boolean).slice(0, 6).join('、');
+    return s + (all.length > 6 ? ' …' : '');
+  },
+
+  renderBin() {
+    const list = el('binList'), ob = el('binOld'), obt = el('binOldT');
+    list.innerHTML = '';
+    const bin = Store.bin();
+    if (!bin.length) {
+      list.innerHTML = '<div class="binempty">还没有备份。<br>以后点「清空自制内容」或删除单条时会自动留一份，随时能在这里还原。</div>';
+    }
+    bin.forEach((snap, i) => {
+      const d = document.createElement('div');
+      d.className = 'binitem';
+      d.innerHTML = `<div class="bi-body"><div class="bi-t">${this.fmtTime(snap.at)}　备份</div>` +
+        `<div class="bi-s">${this.fmtCount(snap.custom)}<br>${this.namesOf(snap.custom)}` +
+        (snap.reason ? `<br><span style="color:#f87171">${snap.reason}</span>` : '') + `</div></div>` +
+        `<div class="bi-btns">` +
+        `<button class="btn mini" data-act="merge" data-i="${i}">合并还原</button>` +
+        `<button class="btn mini ghost" data-act="replace" data-i="${i}">整体替换</button>` +
+        `<button class="btn mini ghost" data-act="del" data-i="${i}">删除备份</button></div>`;
+      list.appendChild(d);
+    });
+
+    // 旧存档抢救
+    ob.innerHTML = '';
+    const olds = Store.scanOldSaves();
+    if (olds.length) { obt.style.display = ''; } else { obt.style.display = 'none'; }
+    olds.forEach(o => {
+      const d = document.createElement('div');
+      d.className = 'binitem old';
+      d.innerHTML = `<div class="bi-body"><div class="bi-t">旧存档 ${o.key}</div>` +
+        `<div class="bi-s">${this.fmtCount(o.custom)}<br>${this.namesOf(o.custom)}</div></div>` +
+        `<div class="bi-btns"><button class="btn mini" data-act="old" data-key="${o.key}">找回</button></div>`;
+      ob.appendChild(d);
+    });
+  },
+
+  // 还原并刷新全界面
+  applyRestore(res, tip) {
+    if (!res) { UI.toast('还原失败，没找到对应备份', 'warn'); return; }
+    Reg.loadCustom();                       // 重新注册，关键词能力也会重挂
+    UI.afterReset(tip + `（新增 ${res.added}${res.updated ? '，覆盖 ' + res.updated : ''}）`);
+  },
+
+  /* 重置/清空后统一刷新：面板、注册表、编辑器状态、HUD */
+  afterReset(msg) {
+    // 装备已被清回标准款，重新应用一次，避免场上还留着旧挡板的宽度
+    W.pd = Reg.paddle(Store.equipOf('paddle'));
+    W.bd = Reg.ball(Store.equipOf('ball'));
+    if (W.paddle) W.paddle.w = W.pd.w;
+    Physics.ballDef();
+    if (typeof Game.applyEquipToBalls === 'function') Game.applyEquipToBalls();
+    UI.renderLevels(); UI.renderTalents(); UI.renderBricks(); UI.refreshStars(); UI.hud();
+    Editor.newBrick(); Editor.newBall(); Editor.newPaddle();
+    Editor.sel.levels = -1; Editor.cells.fill(null);
+    Editor.refreshLists(); Editor.buildPalette(); Editor.buildSelectors(); Editor.renderGrid();
+    UI.toast(msg, 'ok');
+  },
+
+  switchTab(name) {
+    const map = {lv:'paneLv', paddle:'panePaddle', ball:'paneBall', brick:'paneBrick', edit:'paneEdit'};
+    document.querySelectorAll('.tab').forEach(t => t.classList.toggle('on', t.dataset.tab === name));
+    for (const k in map) el(map[k]).classList.toggle('hide', k !== name);
+  }
+};
+
+/* ══════════════════════════════════════════════════════════════
+   14. 游戏流程
+   ══════════════════════════════════════════════════════════════ */
+const Game = {
+  start(n) {
+    W.level = U.clamp(n, 1, LV_COUNT);
+    const src = Object.assign({}, LEVELS[W.level - 1]);
+    this.enter(src);
+  },
+  startCustom(idx) {
+    const src = Object.assign({}, Store.data.custom.levels[idx]);
+    src.__custom = true;
+    this.enter(src);
+  },
+  enter(src) {
+    W.score = 0; W.lives = 3; W.combo = 0; W.deaths = 0;
+    W.eff = {expand: 0, slow: 0, laser: 0};
+    W.narrow = 0; W.fireCd = 0; W.pulseT = 0; W.pulseCd = 0; W.shake = 0;
+    W.drops = []; W.lasers = []; W.ebullets = [];
+    W.lpd = null; W.ptrDown = false; W.lostDefs = []; W.rpd = null;
+    for (let i = 0; i < C.PART_MAX; i++) W.parts[i].life = 0;
+    W.pd = Reg.paddle(src.paddle || Store.equipOf('paddle'));
+    W.bd = Reg.ball(src.ball || Store.equipOf('ball'));
+    W.paddle.w = W.pd.w;
+    W.paddle.x = (C.W - W.paddle.w) / 2;
+    Level.load(src);
+    Physics.resetBall();
+    W.mode = 'ready';
+    UI.hud();
+  },
+
+  clearLevel() {
+    W.mode = 'clear';
+    SFX.beep(880, .12, 'triangle', .07);
+    if (W.src && W.src.__custom) {
+      UI.overlay('自制关卡通关！', `本局得分 <b style="color:#7dd3fc">${W.score}</b>`, '再玩一次', 'retry', '返回选关');
+      return;
+    }
+    const st = W.deaths === 0 ? 3 : W.deaths === 1 ? 2 : 1;
+    const prev = Store.data.stars[W.level] || 0;
+    Store.data.stars[W.level] = Math.max(prev, st);
+    let unlockedNew = false;
+    if (W.level + 1 <= LV_COUNT && Store.data.unlocked < W.level + 1) {
+      Store.data.unlocked = W.level + 1; unlockedNew = true;
+    }
+    Store.save();
+    const isLast = W.level >= LV_COUNT;
+    const starTxt = '★'.repeat(st) + '☆'.repeat(3 - st);
+    UI.overlay(isLast ? '全部通关！' : '第 ' + W.level + ' 关通关！',
+      `<b style="color:#facc15;font-size:22px">${starTxt}</b>　本局得分 <b style="color:#7dd3fc">${W.score}</b><br>` +
+      (isLast ? `你已击破全部 ${LV_COUNT} 关，累计 <b style="color:#facc15">${Store.stars()}</b> 颗星`
+              : `已解锁第 ${W.level + 1} 关「${LEVELS[W.level].name}」`) +
+      `<br><span style="color:#facc15">可用 ★ ${Store.usable()}</span>` +
+      `　<span style="font-size:12px;color:#8ea0c9">回选关页可解锁挡板 / 小球（${talentPriceNote()}）</span>`,
+      isLast ? '返回选关' : '下一关', isLast ? 'select' : 'next', '返回选关');
+  },
+
+  /* 换装备后：同步本关使用的小球，并把已发射的球换成新属性 */
+  applyEquipToBalls() {
+    W.bd = Reg.ball(W.src && W.src.ball ? W.src.ball : Store.equipOf('ball'));
+    const d = W.bd;
+    for (const b of W.balls) {
+      b.def = d;
+      b.r = d.r;
+      b.dmgMul = 1; b.spdMul = 1;
+      // 先清掉旧球留下的能力状态，再让新球的能力重新初始化
+      b.pierce = false; b.pierceHits = null; b.pierceBoss = false;
+      b.dmgAdd = 0; b.stackHits = 0;
+      for (const ab of (d.abilities || [])) {
+        const m = Reg.ability(ab.t);
+        if (m && m.onBallSpawn) m.onBallSpawn(b, ab);
+      }
+      Fx.applySpeed(b);
+    }
+    if (!W.balls.length) Physics.resetBall();
+  },
+
+  /* ── 输入 ── */
+  onClick() {
+    if (W.mode !== 'play') return;
+    if (W.balls.some(b => b.stick)) Physics.launch(); else Physics.fireLaser();
+    Fx.fire('onPaddleClick', W.paddle);
+  },
+  onKey(e) {
+    const k = e.key.toLowerCase();
+    W.keys[k] = true;
+    if (W.mode === 'select') {
+      if (e.code === 'Space' || k === 'escape') { e.preventDefault(); el('selPlay').click(); }
+      return;
+    }
+    if (e.code === 'Space') {
+      e.preventDefault();
+      if (W.mode === 'ready' || W.mode === 'over' || W.mode === 'clear') el('ovBtn').click();
+      else if (W.mode === 'play') this.onClick();
+      else if (W.mode === 'pause') { W.mode = 'play'; UI.hideOverlay(); }
+    }
+    if (k === 'p' || k === 'escape') {
+      if (W.mode === 'play') {
+        W.mode = 'pause';
+        UI.overlay('已暂停', '喘口气，随时继续。', '继续游戏', 'resume', '返回选关');
+      } else if (W.mode === 'pause') { W.mode = 'play'; UI.hideOverlay(); }
+    }
+    if (k === 'r' && W.mode !== 'select') { UI.hideOverlay(); this.enter(W.src); W.mode = 'play'; }
+    if (k === 'j' && W.mode === 'play') Fx.fire('onPaddleClick', W.paddle);
+    if (k === 'm') { const m = SFX.toggle(); }
+    if (['arrowleft', 'arrowright', ' '].includes(k)) e.preventDefault();
+  },
+
+  /* ── 主循环：固定步长物理 + 每帧渲染 ── */
+  acc: 0, last: 0, fps: 60, fpsT: 0, fpsN: 0,
+  loop(now) {
+    if (!this.last) this.last = now;
+    let dt = (now - this.last) / 1000;
+    this.last = now;
+    if (dt > 0.1) dt = 0.1;                 // 防止切后台后大跳
+    this.acc += dt;
+    let guard = 0;
+    while (this.acc >= C.DT && guard++ < 5) {
+      Physics.step(C.DT);
+      this.acc -= C.DT;
+    }
+    Render.draw();
+    requestAnimationFrame(t => this.loop(t));
+  },
+
+  boot() {
+    Store.load();
+    Fx.initParts();
+    Render.init();
+    W.best = +(localStorage.getItem('bb_best') || 0);
+    W.pd = Reg.paddle(Store.equipOf('paddle'));
+    this.start(Store.data.unlocked);
+    W.mode = 'ready';
+    UI.overlay('弹力球',
+      '移动挡板接住小球，撞碎所有方块即可过关。<br>' +
+      '动能蓄力：连撞不碰板，伤害 5→10→15、球速最高翻倍。<br>' +
+      '天赋系统：通关拿 ★（不掉命 3 ★），在「选关 → 平台 / 小球」解锁装备' +
+      `<span style="color:#4ade80">（${talentPriceNote()}）</span>。`,
+      '开始游戏', 'start', '选关');
+    el('ovKeys').textContent =
+      '← → / A D 移动　·　空格 发射　·　左键 发射 / 弹射　·　P Esc 暂停　·　R 重开　·　M 静音　·　' +
+      '激光挡板需按住左键或 J 键连发';
+    // 启动时若发现旧备份 / 旧存档里的自制内容，主动提示一次
+    if (typeof Store.bin === 'function') {
+      const nb = Store.bin().length, no = Store.scanOldSaves().length;
+      if (nb || no) {
+        setTimeout(() => UI.toast(
+          `发现 ${nb ? nb + ' 份备份' : ''}${nb && no ? ' 和 ' : ''}${no ? no + ' 处旧存档自制内容' : ''}` +
+          `，可在「选关 → 回收站」找回`, 'ok'), 1200);
+      }
+    }
+    el('tips').innerHTML =
+      '<b>自定义</b>：砖块 / 平台 / 小球全部数据驱动，定义在 Reg.brick / Reg.paddle / Reg.ball 注册表中；' +
+      '特殊能力写在 note 里并在 Reg.ability 中挂钩子。关卡可用内置编辑器绘制，或导出 JSON 分享。<br>' +
+      `<b>天赋</b>：通关得 ★（不掉命 3 ★ / 掉1命 2 ★ / 掉2命+ 1 ★）；${talentPriceNote()}。` +
+      '正式价目表见 TALENT_COST（重球 1 ★，其余 3 ★）。<br>' +
+      '<b>重置</b>：「重置进度」只清关卡进度 / 星星 / 天赋，<span style="color:#4ade80">自建的砖块·小球·挡板·关卡会保留</span>；' +
+      '要连自制内容一起删，请点「清空自制内容…」。<br>' +
+      '<b>回收站</b>：清空 / 删除 / 导入前会自动留一份备份（最多 8 份），并会扫描浏览器里的旧存档；' +
+      '丢了就到「选关 → 回收站…」合并还原（默认是合并，不会覆盖现有条目）。<br>' +
+      '<b>存进文件</b>：自制内容平时只存在浏览器本地（换浏览器 / 清缓存会丢）。点「选关 → 存进文件…」' +
+      '可下载一份把内容写进 HTML 本身的副本，以后在哪打开都在。<br>' +
+      '<b>当前砖块</b>：' + Reg.list('brick').map(b => `${b.name}(${b.hp}血)`).join('　') +
+      '　·　<b>平台</b>：' + Reg.list('paddle').map(p => p.name).join('　') +
+      '　·　<b>小球</b>：' + Reg.list('ball').map(b => b.name).join('　');
+    requestAnimationFrame(t => this.loop(t));
+  }
+};
+
+/* ══════════════════════════════════════════════════════════════
+   15. 关卡编辑器（与游戏分离，纯数据驱动）
+   ══════════════════════════════════════════════════════════════ */
+const Editor = {
+  cells: [], rows: 5, brush: null, sel: {bricks:-1, balls:-1, paddles:-1, levels:-1},
+  sub: 'brick',
+
+  init() {
+    if (!Store.data) Store.load();
+    Custom.loadAll();
+    this.cells = new Array(C.COLS * C.ROWS_MAX).fill(null);
+    this.buildDrops();
+    this.buildPalette();
+    this.buildSelectors();
+    this.renderGrid();
+    this.newBrick(); this.newBall(); this.newPaddle();
+    this.sel.levels = -1;
+    this.refreshLists();
+  },
+
+  /* ── 子页签切换 ── */
+  switchSub(name) {
+    this.sub = name;
+    document.querySelectorAll('.sub').forEach(b => b.classList.toggle('on', b.dataset.sub === name));
+    for (const k of ['brick','ball','paddle','level'])
+      el('sub' + k[0].toUpperCase() + k.slice(1)).classList.toggle('hide', k !== name);
+    if (name === 'level') { this.buildPalette(); this.renderGrid(); }
+  },
+
+  /* ── 砖块编辑器 ── */
+  dropInputs: [],
+  buildDrops() {
+    const box = el('bkDrops');
+    box.innerHTML = '';
+    this.dropInputs = [];
+    for (const p of Reg.list('power')) {
+      const lab = document.createElement('label');
+      const span = document.createElement('span');
+      span.textContent = p.id + ' ' + p.name;
+      const inp = document.createElement('input');
+      inp.type = 'number'; inp.min = 0; inp.max = 100; inp.step = 1; inp.value = 0;
+      inp.style.width = '58px';
+      inp.dataset.pow = p.id;
+      lab.appendChild(span); lab.appendChild(inp);
+      box.appendChild(lab);
+      this.dropInputs.push(inp);
+    }
+  },
+  newBrick() {
+    this.sel.bricks = -1;
+    this.syncMode('bricks');
+    el('bkName').value = '新砖块';
+    el('bkHp').value = 10;
+    el('bkScore').value = 20;
+    el('bkColor').value = '#7dd3fc';
+    el('bkCh').value = Custom.freeChar() || '1';
+    el('bkNote').value = '';
+    this.dropInputs.forEach(i => i.value = 0);
+    this.syncMode('bricks');
+  },
+  readBrick() {
+    const drops = {};
+    this.dropInputs.forEach(i => {
+      const v = +i.value || 0;
+      if (v > 0) drops[i.dataset.pow] = +(v / 100).toFixed(3);
+    });
+    let ch = (el('bkCh').value || '').trim().charAt(0);
+    if (!ch || ch === '.') ch = Custom.freeChar() || '1';
+    return {
+      name: el('bkName').value || '新砖块',
+      hp: U.clamp(+el('bkHp').value || 10, 1, 999),
+      score: U.clamp(+el('bkScore').value || 20, 0, 999),
+      color: el('bkColor').value || '#7dd3fc',
+      ch, drops, note: el('bkNote').value || '', abilities: []
+    };
+  },
+  saveBrick() {
+    const o = this.readBrick();
+    // 字符冲突检查
+    const curId = this.sel.bricks >= 0 && Store.data.custom.bricks[this.sel.bricks]
+      ? Store.data.custom.bricks[this.sel.bricks].id : null;
+    const clash = Reg.list('brick').find(b => b.ch === o.ch && b.id !== curId);
+    if (clash) { UI.toast('字符 "' + o.ch + '" 已被「' + clash.name + '」占用', 'warn'); return; }
+    if (this.sel.bricks >= 0) {
+      o.id = Store.data.custom.bricks[this.sel.bricks].id;
+      o.abilities = Store.data.custom.bricks[this.sel.bricks].abilities || [];
+      Store.update('bricks', this.sel.bricks, o);
+    } else {
+      const added = Store.add('bricks', o);
+      this.sel.bricks = Store.data.custom.bricks.length - 1;
+    }
+    this.refreshLists(); UI.renderBricks(); UI.renderTalents();
+  },
+
+  /* ── 小球编辑器 ── */
+  newBall() {
+    this.sel.balls = -1;
+    this.syncMode('balls');
+    el('blName').value = '新小球';
+    el('blDmg').value = 1;
+    el('blSpd').value = 1;
+    el('blR').value = 8;
+    el('blColor').value = '#e2e8ff';
+    el('blNote').value = '';
+    this.syncMode('balls');
+  },
+  readBall() {
+    return {
+      name: el('blName').value || '新小球',
+      dmgMul: U.clamp(+el('blDmg').value || 1, 0.1, 10),
+      spdMul: U.clamp(+el('blSpd').value || 1, 0.1, 5),
+      r: U.clamp(+el('blR').value || 8, 4, 20),
+      color: el('blColor').value || '#e2e8ff',
+      note: el('blNote').value || '',
+      abilities: [], icon: '●', cost: TALENT_COST_DEFAULT   // 自制小球默认价（当前 0）
+    };
+  },
+  saveBall() {
+    const o = this.readBall();
+    if (this.sel.balls >= 0) {
+      o.id = Store.data.custom.balls[this.sel.balls].id;
+      o.abilities = Store.data.custom.balls[this.sel.balls].abilities || [];
+      Store.update('balls', this.sel.balls, o);
+    } else {
+      Store.add('balls', o);
+      this.sel.balls = Store.data.custom.balls.length - 1;
+    }
+    this.refreshLists(); UI.renderTalents();
+  },
+
+  /* ── 挡板编辑器 ── */
+  newPaddle() {
+    this.sel.paddles = -1;
+    this.syncMode('paddles');
+    el('pdName').value = '新挡板';
+    el('pdW').value = 1;
+    el('pdIcon').value = '▬';
+    el('pdNote').value = '';
+    this.syncMode('paddles');
+  },
+  readPaddle() {
+    const wMul = U.clamp(+el('pdW').value || 1, 0.4, 3);
+    return {
+      name: el('pdName').value || '新挡板',
+      wMul, w: Math.round(C.PW * wMul),
+      icon: (el('pdIcon').value || '▬').charAt(0),
+      note: el('pdNote').value || '',
+      abilities: [], cost: TALENT_COST_DEFAULT               // 自制挡板默认价（当前 0）
+    };
+  },
+  savePaddle() {
+    const o = this.readPaddle();
+    if (this.sel.paddles >= 0) {
+      o.id = Store.data.custom.paddles[this.sel.paddles].id;
+      o.abilities = Store.data.custom.paddles[this.sel.paddles].abilities || [];
+      Store.update('paddles', this.sel.paddles, o);
+    } else {
+      Store.add('paddles', o);
+      this.sel.paddles = Store.data.custom.paddles.length - 1;
+    }
+    this.refreshLists(); UI.renderTalents();
+  },
+
+  /* ── 关卡编辑器 ── */
+  buildPalette() {
+    const box = el('edPalette');
+    box.innerHTML = '';
+    const add = (id, label, color, on) => {
+      const b = document.createElement('button');
+      b.className = 'pal' + (on ? ' on' : '');
+      b.textContent = label;
+      if (color) b.style.borderColor = color;
+      b.addEventListener('click', () => { this.brush = id; this.buildPalette(); });
+      box.appendChild(b);
+    };
+    add(null, '橡皮', null, this.brush === null);
+    for (const b of Reg.list('brick')) add(b.id, b.name, b.color, this.brush === b.id);
+  },
+  buildSelectors() {
+    for (const [id, table] of [['edPaddle', 'paddle'], ['edBall', 'ball']]) {
+      const s = el(id);
+      s.innerHTML = '';
+      const auto = document.createElement('option');
+      auto.value = ''; auto.textContent = '跟随当前装备';
+      s.appendChild(auto);
+      for (const p of Reg.list(table)) {
+        const o = document.createElement('option');
+        o.value = p.id; o.textContent = p.name; s.appendChild(o);
+      }
+    }
+  },
+  renderGrid() {
+    const g = el('edGrid');
+    g.innerHTML = '';
+    g.style.gridTemplateColumns = `repeat(${C.COLS}, auto)`;
+    for (let r = 0; r < this.rows; r++) {
+      for (let c = 0; c < C.COLS; c++) {
+        const gi = r * C.COLS + c;
+        const id = this.cells[gi];
+        const def = id ? Reg.brick(id) : null;
+        const b = document.createElement('button');
+        b.className = 'cell';
+        if (def) { b.style.background = def.color; b.textContent = def.ch || ''; }
+        b.style.fontSize = '10px'; b.style.color = 'rgba(0,0,0,.65)';
+        b.addEventListener('click', () => { this.cells[gi] = this.brush; this.renderGrid(); });
+        b.addEventListener('contextmenu', e => { e.preventDefault(); this.cells[gi] = null; this.renderGrid(); });
+        g.appendChild(b);
+      }
+    }
+  },
+  toLevelJSON() {
+    const idMap = {};
+    for (const b of Reg.list('brick')) if (b.ch) idMap[b.id] = b.ch;
+    const pat = [];
+    for (let r = 0; r < this.rows; r++) {
+      let line = '';
+      for (let c = 0; c < C.COLS; c++) {
+        const id = this.cells[r * C.COLS + c];
+        line += id ? (idMap[id] || '.') : '.';
+      }
+      pat.push(line);
+    }
+    return {
+      name: el('edName').value || '我的关卡',
+      speed: +el('edSpeed').value || 5.5,
+      boss: el('edBoss').value || null,
+      // 留空 = 跟随当前装备；写死具体 id 才会锁死该关卡的挡板/小球
+      paddle: el('edPaddle').value || undefined,
+      ball: el('edBall').value || undefined,
+      pat
+    };
+  },
+  fromLevelJSON(lv) {
+    const map = {};
+    for (const b of Reg.list('brick')) if (b.ch) map[b.ch] = b.id;
+    this.cells.fill(null);
+    (lv.pat || []).forEach((line, r) => {
+      if (r >= C.ROWS_MAX) return;
+      for (let c = 0; c < C.COLS; c++) {
+        const id = map[line[c]];
+        if (id) this.cells[r * C.COLS + c] = id;
+      }
+    });
+    this.rows = U.clamp((lv.pat || []).length || 5, 1, C.ROWS_MAX);
+    el('edName').value = lv.name || '我的关卡';
+    el('edSpeed').value = lv.speed || 5.5;
+    el('edBoss').value = lv.boss || '';
+    el('edPaddle').value = lv.paddle || '';
+    el('edBall').value = lv.ball || '';
+    el('edRows').value = this.rows;
+    this.renderGrid();
+  },
+  saveLevel() {
+    const lv = this.toLevelJSON();
+    if (!lv.pat.some(l => /[^.]/.test(l))) { UI.toast('请先绘制至少一个砖块', 'warn'); return; }
+    if (this.sel.levels >= 0 && Store.data.custom.levels[this.sel.levels]) {
+      lv.id = Store.data.custom.levels[this.sel.levels].id;
+      Store.update('levels', this.sel.levels, lv);
+    } else {
+      Store.add('levels', lv);
+      this.sel.levels = Store.data.custom.levels.length - 1;
+    }
+    this.refreshLists(); UI.renderLevels();
+  },
+  test() {
+    const lv = this.toLevelJSON();
+    if (!lv.pat.some(l => /[^.]/.test(l))) { UI.toast('请先绘制至少一个砖块', 'warn'); return; }
+    lv.__custom = true;
+    UI.closeSelect();
+    Game.enter(lv);
+    W.mode = 'play';
+    SFX.resume();
+  },
+
+  /* ── 模式同步：让「新建 / 编辑中」始终可见，避免保存被误当成新增 ── */
+  META: {
+    bricks:  {status:'bkStatus', save:'bkSave', list:'bkList', label:'砖块', name:o => o.name},
+    balls:   {status:'blStatus', save:'blSave', list:'blList', label:'小球', name:o => o.name},
+    paddles: {status:'pdStatus', save:'pdSave', list:'pdList', label:'挡板', name:o => o.name},
+    levels:  {status:'edStatus', save:'edSave', list:'edList', label:'关卡', name:o => o.name}
+  },
+  syncMode(kind) {
+    const m = this.META[kind];
+    if (!m) return;
+    const i = this.sel[kind];
+    const o = (i >= 0) ? Store.data.custom[kind][i] : null;
+    const st = el(m.status);
+    if (o) {
+      st.textContent = `当前：编辑「${m.name(o)}」　→　再点保存会覆盖它；要新增请点「新建」`;
+      st.style.color = '#fbbf24';
+      el(m.save).textContent = '保存修改';
+      el(m.list).value = String(i);
+    } else {
+      st.textContent = '当前：新建模式　→　点保存会新增一条';
+      st.style.color = '#8ea0c9';
+      el(m.save).textContent = '新增保存';
+      el(m.list).value = '';
+    }
+  },
+  syncAll() { for (const k in this.META) this.syncMode(k); },
+
+  // 删除时取索引：优先内部 sel，其次下拉框当前选中项
+  pickForDelete(kind) {
+    const m = this.META[kind];
+    let i = this.sel[kind];
+    if (i < 0 || !Store.data.custom[kind][i]) {
+      const v = el(m.list).value;
+      i = (v === '' || v === null) ? -1 : +v;
+    }
+    return (i >= 0 && Store.data.custom[kind][i]) ? i : -1;
+  },
+
+  /* ── 列表与载入 ── */
+  refreshLists() {
+    const mk = (selId, kind, fmt) => {
+      const s = el(selId);
+      s.innerHTML = '<option value="">— 选择已保存条目 —</option>';
+      Store.data.custom[kind].forEach((o, i) => {
+        const op = document.createElement('option');
+        op.value = i; op.textContent = `${i + 1}. ${fmt(o)}`;
+        s.appendChild(op);
+      });
+      if (this.sel[kind] >= 0) s.value = String(this.sel[kind]);
+    };
+    mk('bkList', 'bricks', o => `${o.name}（${o.hp}血/${o.score}分/${o.color}）`);
+    mk('blList', 'balls', o => `${o.name}（伤害×${o.dmgMul}/速度×${o.spdMul}/r${o.r}）`);
+    mk('pdList', 'paddles', o => `${o.name}（长度×${o.wMul}=${o.w}px）`);
+    mk('edList', 'levels', o => `${o.name}（${o.speed}速${o.boss ? ' · BOSS' : ''}）`);
+    this.syncAll();
+  },
+  loadBrick(i) {
+    const o = Store.data.custom.bricks[i]; if (!o) return;
+    this.sel.bricks = i;
+    this.syncMode('bricks');
+    el('bkName').value = o.name; el('bkHp').value = o.hp;
+    el('bkScore').value = o.score; el('bkColor').value = o.color;
+    el('bkCh').value = o.ch || ''; el('bkNote').value = o.note || '';
+    this.dropInputs.forEach(inp => {
+      inp.value = (o.drops && o.drops[inp.dataset.pow]) ? Math.round(o.drops[inp.dataset.pow] * 100) : 0;
+    });
+  },
+  loadBall(i) {
+    const o = Store.data.custom.balls[i]; if (!o) return;
+    this.sel.balls = i;
+    this.syncMode('balls');
+    el('blName').value = o.name; el('blDmg').value = o.dmgMul;
+    el('blSpd').value = o.spdMul; el('blR').value = o.r || 8;
+    el('blColor').value = o.color || '#e2e8ff'; el('blNote').value = o.note || '';
+  },
+  loadPaddle(i) {
+    const o = Store.data.custom.paddles[i]; if (!o) return;
+    this.sel.paddles = i;
+    this.syncMode('paddles');
+    el('pdName').value = o.name; el('pdW').value = o.wMul;
+    el('pdIcon').value = o.icon || '▬'; el('pdNote').value = o.note || '';
+  },
+  loadLevel(i) {
+    const lv = Store.data.custom.levels[i]; if (!lv) return;
+    this.sel.levels = i;
+    this.fromLevelJSON(lv);
+    this.syncMode('levels');
+  },
+  newLevel() {
+    this.sel.levels = -1;
+    this.cells.fill(null);
+    this.rows = 5;
+    el('edRows').value = 5;
+    el('edName').value = '我的关卡';
+    el('edSpeed').value = 5.5;
+    el('edBoss').value = '';
+    el('edPaddle').value = '';      // 默认「跟随当前装备」
+    el('edBall').value = '';
+    this.renderGrid();
+    this.syncMode('levels');
+  },
+
+  /* ── 统一删除：不依赖内部 sel，下拉选中即可删 ── */
+  removeCurrent(kind) {
+    const m = this.META[kind];
+    const list = Store.data.custom[kind];
+    if (!list.length) { UI.toast('列表是空的，没有可删除的条目', 'warn'); return false; }
+    const i = this.pickForDelete(kind);
+    if (i < 0) {
+      UI.toast('请先在下方列表里选中要删除的' + m.label, 'warn');
+      return false;
+    }
+    UI.confirm('确定删除「' + m.name(list[i]) + '」？此操作不可撤销。', () => this.doRemove(kind, i));
+    return true;
+  },
+
+  // 真正的删除动作（确认框点「确定」后执行）
+  doRemove(kind, i) {
+    const m = this.META[kind];
+    const list = Store.data.custom[kind];
+    const o = list[i];
+    if (!o) { UI.toast('该条目已不存在', 'warn'); return; }
+    const name = m.name(o);
+    const wasEquipped = (kind === 'balls' || kind === 'paddles') &&
+      Store.equipOf(kind === 'balls' ? 'ball' : 'paddle') === o.id;
+    Store.remove(kind, i);
+    this.refreshLists();
+    if (kind === 'bricks') UI.renderBricks();
+    else if (kind === 'levels') UI.renderLevels();
+    else { UI.renderTalents(); UI.renderLevels(); }   // 关卡下拉可能引用了它
+
+    // 删完后自动选中相邻的条目，方便连续删除；列表空了才回到新建模式
+    const rest = Store.data.custom[kind];
+    let nextName = '';
+    if (rest.length) {
+      const j = Math.min(i, rest.length - 1);
+      if (kind === 'bricks') this.loadBrick(j);
+      else if (kind === 'balls') this.loadBall(j);
+      else if (kind === 'paddles') this.loadPaddle(j);
+      else this.loadLevel(j);
+      nextName = '　·　已切到「' + this.META[kind].name(rest[j]) + '」，要新增请点「新建」';
+    } else {
+      this.sel[kind] = -1;
+      if (kind === 'bricks') this.newBrick();
+      else if (kind === 'balls') this.newBall();
+      else if (kind === 'paddles') this.newPaddle();
+      else this.newLevel();
+    }
+    this.refreshLists();
+    UI.toast('已删除「' + name + '」' + (wasEquipped ? '，并已自动切回标准装备' : '') + nextName, 'ok');
+  },
+
+  /* ── 导入导出 ── */
+  exportAll() { el('edJson').value = JSON.stringify(Custom.exportJSON(), null, 1); },
+  exportCode() {
+    el('edJson').value = Custom.exportCode();
+  },
+  importJSON() {
+    try {
+      const d = JSON.parse(el('edJson').value);
+      if (!d || typeof d !== 'object') throw new Error('不是合法对象');
+      Store.snapshot('导入 JSON 前');        // 导入可能覆盖同 id 条目，先留备份
+      let n = 0, updated = 0;
+      for (const kind of ['bricks', 'balls', 'paddles', 'levels']) {
+        const list = Store.data.custom[kind];
+        for (const o of (d[kind] || [])) {
+          if (!o.name) continue;
+          // 同 id（关卡用 名称+图案）已存在则覆盖，避免重复导入产生一堆重复条目
+          const key = kind === 'levels' ? (o.name + '|' + (o.pat || []).join('')) : o.id;
+          const idx = key ? list.findIndex(x =>
+            (kind === 'levels' ? (x.name + '|' + (x.pat || []).join('')) : x.id) === key) : -1;
+          if (idx >= 0) { list[idx] = o; updated++; } else list.push(o);
+          if (kind !== 'levels') Custom.register(o);
+          n++;
+        }
+      }
+      Store.save();
+      if (!n) throw new Error('没有找到可导入的条目（需含 bricks/balls/paddles/levels）');
+      this.refreshLists(); this.buildPalette(); this.buildSelectors();
+      UI.renderBricks(); UI.renderTalents(); UI.renderLevels();
+      UI.toast('导入成功：' + n + ' 个条目' + (updated ? '（其中 ' + updated + ' 个为覆盖更新）' : ''), 'ok');
+    } catch (err) { UI.toast('导入失败：' + err.message, 'warn'); }
+  }
+};
+
+/* ══════════════════════════════════════════════════════════════
+   16. 事件绑定
+   ══════════════════════════════════════════════════════════════ */
+function pointerX(clientX) {
+  const rect = CV.getBoundingClientRect();
+  return (clientX - rect.left) * (C.W / rect.width);
+}
+function movePaddle(x) {
+  W.paddle.x = U.clamp(x - W.paddle.w / 2, 0, C.W - W.paddle.w);
+  for (const b of W.balls) if (b.stick) b.x = W.paddle.x + W.paddle.w / 2;
+}
+
+CV.addEventListener('mousemove', e => {
+  if (W.mode === 'play' || W.mode === 'ready') movePaddle(pointerX(e.clientX));
+});
+CV.addEventListener('touchmove', e => {
+  e.preventDefault();
+  if (W.mode === 'play' || W.mode === 'ready') movePaddle(pointerX(e.touches[0].clientX));
+}, {passive: false});
+CV.addEventListener('mousedown', () => { W.ptrDown = true; Game.onClick(); });
+CV.addEventListener('touchstart', () => { W.ptrDown = true; Game.onClick(); }, {passive: true});
+// 抬起要挂在 window 上：在画布外松手也能正确停止长按连发
+addEventListener('mouseup', () => { W.ptrDown = false; });
+addEventListener('touchend', () => { W.ptrDown = false; });
+addEventListener('touchcancel', () => { W.ptrDown = false; });
+addEventListener('blur', () => { W.ptrDown = false; });
+
+addEventListener('keydown', e => Game.onKey(e));
+addEventListener('keyup', e => { W.keys[e.key.toLowerCase()] = false; });
+
+el('ovBtn').addEventListener('click', () => {
+  UI.hideOverlay();
+  SFX.resume();
+  const a = UI._action;
+  if (a === 'resume') W.mode = 'play';
+  else if (a === 'next') Game.start(W.level + 1);
+  else if (a === 'retry') Game.enter(W.src);
+  else if (a === 'select') { UI.openSelect(); return; }
+  else Game.start(Store.data.unlocked);
+  W.mode = 'play';
+});
+el('ovBtn2').addEventListener('click', () => { UI.hideOverlay(); UI.openSelect(); });
+
+document.querySelectorAll('.tab').forEach(tb => {
+  tb.addEventListener('click', () => {
+    UI.switchTab(tb.dataset.tab);
+    if (tb.dataset.tab === 'edit' && !Editor.cells.length) Editor.init();
+  });
+});
+
+el('selPlay').addEventListener('click', () => {
+  UI.closeSelect(); Game.start(Store.data.unlocked); W.mode = 'play'; SFX.resume();
+});
+/* 重置进度：只清关卡进度 / 星星 / 已解锁天赋，自建的砖块·小球·挡板·关卡一律保留 */
+el('selReset').addEventListener('click', () => {
+  const n = Store.customCount();
+  UI.confirm('重置<b>关卡进度、星星与天赋解锁</b>？<br>' +
+    `<span style="color:#4ade80">你自建的内容会保留（共 ${n} 项）</span><br>` +
+    '<span style="font-size:12px;color:#8ea0c9">星星清零后需重新通关攒 ★ 解锁装备</span>', () => {
+    Store.reset(true);                       // ← 保留自制内容
+    Reg.loadCustom();                        // 重新注册（自定义条目的 abilities 关键词也会重挂）
+    UI.afterReset('进度已重置，自建内容已保留');
+  });
+});
+
+/* 清空自制内容：需要单独确认，避免误删 */
+el('selWipe').addEventListener('click', () => {
+  const n = Store.customCount();
+  if (!n) { UI.toast('当前没有自建内容，无需清空', 'warn'); return; }
+  UI.confirm(`确定删除全部自建内容吗？共 <b style="color:#f87171">${n} 项</b>` +
+    '（砖块 / 小球 / 挡板 / 关卡）<br>此操作不可撤销，且会同时重置进度与星星。', () => {
+    Store.reset(false);
+    Reg.loadCustom();
+    UI.afterReset('自建内容已清空，进度已重置');
+  });
+});
+
+/* ── 固化：把自制内容写进 HTML 文件本体，跟着文件走 ── */
+el('selBake').addEventListener('click', () => {
+  const n = Store.customCount();
+  if (!n) { UI.toast('当前没有自制内容可固化', 'warn'); return; }
+  UI.confirm(`把当前 <b style="color:#facc15">${n} 项</b>自制内容写进文件并下载一份新 HTML？<br>` +
+    '下载的文件打开后内容会自动出现，换电脑 / 清缓存都不会丢。<br>' +
+    '<span style="font-size:12px;color:#8ea0c9">进度与星星不带走（只固化砖块 / 小球 / 挡板 / 关卡）。' +
+    '若浏览器拦截下载，可用「导出备份 JSON」手工粘贴。</span>', () => UI.bakeToFile());
+});
+
+/* ── 回收站 ── */
+el('selBin').addEventListener('click', () => UI.openBin());
+el('binClose').addEventListener('click', () => UI.closeBin());
+el('binUI').addEventListener('click', e => { if (e.target === el('binUI')) UI.closeBin(); });
+el('binClear').addEventListener('click', () => {
+  UI.confirm('清空回收站里的全部备份？<br><span style="color:#f87171">已还原的内容不受影响，但备份删掉后无法再找回。</span>',
+    () => { Store.binClear(); UI.renderBin(); UI.toast('回收站已清空', 'ok'); });
+});
+el('binExport').addEventListener('click', () => {
+  const bin = Store.bin();
+  if (!bin.length) { UI.toast('回收站是空的，没有可导出的数据', 'warn'); return; }
+  // 把所有备份合并成一份 JSON 放到编辑器文本框，可直接复制走或再「导入 JSON」
+  const merged = {bricks: [], balls: [], paddles: [], levels: []};
+  for (const s of bin) for (const k in merged) {
+    for (const o of (s.custom[k] || [])) {
+      const key = k === 'levels' ? (o.name + '|' + (o.pat || []).join('')) : o.id;
+      if (!merged[k].some(x => (k === 'levels' ? (x.name + '|' + (x.pat || []).join('')) : x.id) === key))
+        merged[k].push(o);
+    }
+  }
+  el('edJson').value = JSON.stringify(merged, null, 1);
+  UI.closeBin(); UI.switchTab('edit');
+  UI.toast('已把备份合并导出到编辑器文本框，复制保存即可', 'ok');
+});
+el('binList').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  const i = +b.dataset.i, act = b.dataset.act;
+  if (act === 'del') { Store.binRemove(i); UI.renderBin(); UI.toast('已删除该备份', 'ok'); return; }
+  if (act === 'replace') {
+    UI.confirm('用这份备份<b>整体替换</b>当前自制内容？<br>' +
+      '<span style="color:#f87171">现有的自建条目会被覆盖</span>，建议先点「导出备份 JSON」保存一份。', () => {
+      UI.applyRestore(Store.binRestore(i, 'replace'), '已整体替换');
+      UI.renderBin();
+    });
+    return;
+  }
+  UI.applyRestore(Store.binRestore(i, 'merge'), '已合并还原');
+  UI.renderBin();
+});
+el('binOld').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  UI.applyRestore(Store.restoreOld(b.dataset.key), '已从旧存档找回');
+  UI.renderBin();
+});
+
+/* 页内确认框按钮 */
+el('moYes').addEventListener('click', () => {
+  const fn = UI._yes;
+  UI.closeConfirm();
+  if (fn) fn();
+});
+el('moNo').addEventListener('click', () => UI.closeConfirm());
+el('modal').addEventListener('click', e => { if (e.target === el('modal')) UI.closeConfirm(); });
+
+/* 编辑器：子页签 */
+document.querySelectorAll('.sub').forEach(b => {
+  b.addEventListener('click', () => Editor.switchSub(b.dataset.sub));
+});
+
+/* 砖块 */
+el('bkSave').addEventListener('click', () => Editor.saveBrick());
+el('bkNew').addEventListener('click', () => { Editor.newBrick(); Editor.refreshLists(); });
+el('bkDel').addEventListener('click', () => Editor.removeCurrent('bricks'));
+el('bkList').addEventListener('change', e => {
+  if (e.target.value === '') { Editor.newBrick(); Editor.refreshLists(); return; }
+  Editor.loadBrick(+e.target.value);
+});
+
+/* 小球 */
+el('blSave').addEventListener('click', () => Editor.saveBall());
+el('blNew').addEventListener('click', () => { Editor.newBall(); Editor.refreshLists(); });
+el('blDel').addEventListener('click', () => Editor.removeCurrent('balls'));
+el('blList').addEventListener('change', e => {
+  if (e.target.value === '') { Editor.newBall(); Editor.refreshLists(); return; }
+  Editor.loadBall(+e.target.value);
+});
+
+/* 挡板 */
+el('pdSave').addEventListener('click', () => Editor.savePaddle());
+el('pdNew').addEventListener('click', () => { Editor.newPaddle(); Editor.refreshLists(); });
+el('pdDel').addEventListener('click', () => Editor.removeCurrent('paddles'));
+el('pdList').addEventListener('change', e => {
+  if (e.target.value === '') { Editor.newPaddle(); Editor.refreshLists(); return; }
+  Editor.loadPaddle(+e.target.value);
+});
+
+/* 关卡 */
+el('edRows').addEventListener('change', e => {
+  Editor.rows = U.clamp(+e.target.value || 5, 1, C.ROWS_MAX);
+  e.target.value = Editor.rows;
+  Editor.renderGrid();
+});
+el('edSave').addEventListener('click', () => Editor.saveLevel());
+el('edTest').addEventListener('click', () => Editor.test());
+el('edClear').addEventListener('click', () => {
+  Editor.cells.fill(null); Editor.sel.levels = -1;
+  Editor.renderGrid(); Editor.refreshLists();
+});
+el('edDel').addEventListener('click', () => Editor.removeCurrent('levels'));
+el('edNew').addEventListener('click', () => { Editor.newLevel(); Editor.refreshLists(); });
+el('edList').addEventListener('change', e => {
+  // 选回占位项 = 回到新建模式（不清空画布，避免误删正在画的图案）
+  if (e.target.value === '') { Editor.sel.levels = -1; Editor.syncMode('levels'); Editor.refreshLists(); return; }
+  Editor.loadLevel(+e.target.value);
+});
+
+/* 通用导出 */
+el('exAll').addEventListener('click', () => Editor.exportAll());
+el('exCode').addEventListener('click', () => Editor.exportCode());
+el('exCopy').addEventListener('click', () => {
+  const ta = el('edJson');
+  ta.select();
+  try { document.execCommand('copy'); } catch (e) {}
+  if (navigator.clipboard) navigator.clipboard.writeText(ta.value).catch(() => {});
+});
+el('exImport').addEventListener('click', () => Editor.importJSON());
+
+/* ══════════════════════════════════════════════════════════════
+   16.5 固化区 —— 把自制内容真正写进这个 HTML 文件
+   ──────────────────────────────────────────────────────────────
+   平时自制内容存在浏览器的 localStorage 里（键 bb_save_v4），
+   它跟「浏览器 + 这个文件所在位置」绑定：换浏览器、清缓存、挪动文件都可能丢。
+   想让内容跟着文件走，就用选关页的「存进文件…」按钮，
+   它会下载一份把内容写进下面这个 BAKED_CUSTOM 的新 HTML——
+   以后无论在哪台电脑打开那个文件，内容都会自动回来。
+   也可以手工把「导出全部 JSON」里的 bricks / balls / paddles / levels 四项粘到下面。
+   注意：本地自制内容非空时，固化区不会自动覆盖它（避免把你新做的东西冲掉）。
+   ══════════════════════════════════════════════════════════════ */
+/*BAKED_START*/
+window.BAKED_CUSTOM = {"bricks":[],"balls":[],"paddles":[],"levels":[]};
+/*BAKED_END*/
+// 启动时：本地没有自制内容、但文件里固化了 → 自动取回（换电脑/清缓存后自愈）
+function applyBaked() {
+  const b = window.BAKED_CUSTOM;
+  if (!b || typeof b !== 'object') return 0;
+  if (countCustom(b) === 0) return 0;
+  if (countCustom(Store.data.custom) > 0) return 0;   // 本地已有内容，不打扰
+  const r = Store.mergeCustom(b, false);
+  return r ? r.added : 0;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   17. 启动
+   ══════════════════════════════════════════════════════════════ */
+Store.load();      // 存档先就绪，编辑器与流程都要读它
+(function () {     // 从固化区取回（仅本地为空时）
+  try {
+    const n = applyBaked();
+    if (n) { Reg.loadCustom(); setTimeout(() => UI.toast(`已从文件固化区取回 ${n} 项自制内容`, 'ok'), 900); }
+  } catch (e) {}
+})();
+// 老存档迁移：以前保存关卡时会被写死成 classic 挡板/小球，导致自制关卡里装备无效
+(function migrateLevels() {
+  let n = 0;
+  for (const l of Store.data.custom.levels) {
+    if (l.paddle === 'classic') { delete l.paddle; n++; }
+    if (l.ball === 'classic') { delete l.ball; n++; }
+  }
+  if (n) Store.save();
+})();
+Editor.init();
+Game.boot();
+
+})();
+</script>
+</body>
+</html>
